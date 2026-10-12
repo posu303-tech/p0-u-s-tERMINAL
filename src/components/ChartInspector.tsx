@@ -13,6 +13,7 @@ import {
   Clock,
   Radio,
 } from 'lucide-react';
+import { MarketStatusBadge } from './MarketStatusBadge';
 
 interface ChartInspectorProps {
   symbol: string;
@@ -122,14 +123,17 @@ export const ChartInspector: React.FC<ChartInspectorProps> = ({
     >
       {/* Top Bar Header matching screenshot */}
       <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 px-3 sm:px-4 py-2 border-b border-slate-800/80 bg-[#070b0e] relative">
-        {/* Left: Live Ticker Identity */}
-        <div className="flex items-center gap-2 shrink-0">
+        {/* Left: Live Ticker Identity & Market Status */}
+        <div className="flex flex-wrap items-center gap-2 shrink-0">
           <div className="flex items-center gap-1.5">
-            <span className="w-2.5 h-2.5 rounded-full bg-emerald-400 animate-pulse shadow-[0_0_8px_#10b981] shrink-0"></span>
             <span className="text-xs font-mono text-slate-300 font-semibold tracking-wide">
-              Live ticks — {symbol}
+              {symbol}
             </span>
           </div>
+          <MarketStatusBadge
+            segmentOrExchange={symbol.includes('MCX') ? 'MCX' : 'NSE'}
+            size="sm"
+          />
           {technicals?.patternDetected && (
             <span className="hidden lg:inline text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-950/80 text-cyan-300 border border-cyan-800/60">
               {technicals.patternDetected}

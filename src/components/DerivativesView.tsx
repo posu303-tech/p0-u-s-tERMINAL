@@ -4,6 +4,7 @@ import { TRANSLATIONS } from '../i18n/translations';
 import { exportOptionChainToCSV } from '../services/csvExport';
 import { generateOptionChain } from '../services/marketEngine';
 import { Download, Layers, Calendar, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { MarketStatusBadge } from './MarketStatusBadge';
 
 interface DerivativesViewProps {
   optionChain: OptionChainData;
@@ -127,12 +128,13 @@ export const DerivativesView: React.FC<DerivativesViewProps> = ({
             </select>
           </div>
 
-          {/* Live Underlying LTP badge */}
-          <div className="flex items-center gap-2 font-mono text-xs">
+          {/* Live Underlying LTP badge & Market Status */}
+          <div className="flex flex-wrap items-center gap-2 font-mono text-xs">
             <span className="text-slate-400">LTP:</span>
             <span className="font-bold text-white tabular-nums px-2 py-0.5 rounded bg-slate-800">
               ₹{chain.underlyingLTP.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
             </span>
+            <MarketStatusBadge segmentOrExchange="NSE" size="sm" />
             <button
               onClick={() => onSelectSymbolForChart(selectedUnderlying === 'NIFTY' ? 'NIFTY 50' : selectedUnderlying)}
               className="text-cyan-400 hover:underline text-[11px] font-sans ml-1"

@@ -3,6 +3,7 @@ import { CommodityData, LanguageCode } from '../types/market';
 import { TRANSLATIONS } from '../i18n/translations';
 import { exportCommoditiesToCSV } from '../services/csvExport';
 import { Download, BarChart2, Globe, Flame, Shield, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { MarketStatusBadge } from './MarketStatusBadge';
 
 interface CommoditiesViewProps {
   commodities: CommodityData[];
@@ -81,6 +82,9 @@ export const CommoditiesView: React.FC<CommoditiesViewProps> = ({
                   <span className="text-xs text-slate-400 font-mono mt-0.5 block">
                     {item.symbol} · Expiry: {item.expiry}
                   </span>
+                  <div className="mt-1.5">
+                    <MarketStatusBadge segmentOrExchange="MCX" size="sm" />
+                  </div>
                 </div>
                 <div
                   className={`flex items-center text-xs font-semibold font-mono tabular-nums px-2 py-0.5 rounded ${

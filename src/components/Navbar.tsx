@@ -2,6 +2,7 @@ import React from 'react';
 import { LanguageCode } from '../types/market';
 import { TRANSLATIONS } from '../i18n/translations';
 import { Lock, Unlock, Moon, Sun, Bell, FileText, Wifi, WifiOff } from 'lucide-react';
+import { MarketStatusBadge } from './MarketStatusBadge';
 
 interface NavbarProps {
   activeTab: string;
@@ -212,15 +213,23 @@ export const Navbar: React.FC<NavbarProps> = ({
         </button>
       </div>
 
-      {/* Compliance Sub-strip */}
-      <div className="bg-slate-900/80 border-t border-slate-800/80 px-3 sm:px-4 py-1 text-[10px] sm:text-[11px] flex items-center justify-between font-mono text-slate-400">
+      {/* Compliance & Market Status Sub-strip */}
+      <div className="bg-slate-900/80 border-t border-slate-800/80 px-3 sm:px-4 py-1 text-[10px] sm:text-[11px] flex items-center justify-between font-mono text-slate-400 gap-2 flex-wrap">
         <div className="flex items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap">
           <span className="text-amber-400 font-semibold truncate">{t.monitoringOnlyNotice}</span>
           <span className="hidden md:inline text-slate-500">·</span>
           <span className="hidden md:inline text-slate-400">SEBI Non-Execution Analytics Compliant</span>
         </div>
-        <div className="flex items-center gap-2 text-slate-400 shrink-0 text-[10px]">
-          <span>NSE · BSE · MCX</span>
+        <div className="flex items-center gap-2.5 text-slate-400 shrink-0 text-[10px] ml-auto">
+          <div className="flex items-center gap-1.5">
+            <span className="text-slate-500 font-bold">NSE:</span>
+            <MarketStatusBadge segmentOrExchange="NSE" size="sm" />
+          </div>
+          <span className="text-slate-700">|</span>
+          <div className="flex items-center gap-1.5">
+            <span className="text-slate-500 font-bold">MCX:</span>
+            <MarketStatusBadge segmentOrExchange="MCX" size="sm" />
+          </div>
         </div>
       </div>
     </header>

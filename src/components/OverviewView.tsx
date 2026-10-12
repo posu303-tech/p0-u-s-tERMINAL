@@ -19,6 +19,7 @@ import {
   Globe,
   Radio,
 } from 'lucide-react';
+import { MarketStatusBadge } from './MarketStatusBadge';
 
 interface OverviewViewProps {
   indices: IndexData[];
@@ -84,6 +85,9 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                       </span>
                     </div>
                     <p className="text-xs text-slate-400 mt-0.5">{idx.name}</p>
+                    <div className="mt-1.5">
+                      <MarketStatusBadge segmentOrExchange={idx.segment} size="sm" />
+                    </div>
                   </div>
                   <div
                     className={`flex items-center text-xs font-semibold font-mono tabular-nums px-2 py-0.5 rounded ${
@@ -275,7 +279,10 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                     <span className="font-bold text-white text-xs font-mono">{g.symbol}</span>
                     <span className="text-[10px] text-slate-400">· {g.sector}</span>
                   </div>
-                  <span className="text-[10px] text-slate-500 font-mono">Vol: {(g.volume / 100000).toFixed(1)}L</span>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-[10px] text-slate-500 font-mono">Vol: {(g.volume / 100000).toFixed(1)}L</span>
+                    <MarketStatusBadge segmentOrExchange={g.exchange} size="sm" />
+                  </div>
                 </div>
                 <div className="text-right font-mono">
                   <div className="text-xs font-bold text-white tabular-nums">
@@ -314,7 +321,10 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                     <span className="font-bold text-white text-xs font-mono">{l.symbol}</span>
                     <span className="text-[10px] text-slate-400">· {l.sector}</span>
                   </div>
-                  <span className="text-[10px] text-slate-500 font-mono">Vol: {(l.volume / 100000).toFixed(1)}L</span>
+                  <div className="flex items-center gap-2 mt-0.5">
+                    <span className="text-[10px] text-slate-500 font-mono">Vol: {(l.volume / 100000).toFixed(1)}L</span>
+                    <MarketStatusBadge segmentOrExchange={l.exchange} size="sm" />
+                  </div>
                 </div>
                 <div className="text-right font-mono">
                   <div className="text-xs font-bold text-white tabular-nums">
