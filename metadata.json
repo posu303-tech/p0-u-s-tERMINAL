@@ -1,0 +1,8 @@
+{
+  "name": "p0$u's tERMINAL",
+  "description": "Real-time institutional-grade market monitoring dashboard for NSE, BSE, and MCX with end-to-end encrypted client vault, technical alerts, option chains, and macro analytics.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}
