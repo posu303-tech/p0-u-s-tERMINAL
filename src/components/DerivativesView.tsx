@@ -47,7 +47,7 @@ export const DerivativesView: React.FC<DerivativesViewProps> = ({
     }
 
     // Lookup LTP for the selected underlying
-    let ltp = 25145.8;
+    let ltp = 22363.35;
     if (selectedUnderlying === 'NIFTY') {
       ltp = optionChain.underlyingLTP;
     } else if (selectedUnderlying === 'BANKNIFTY') {
