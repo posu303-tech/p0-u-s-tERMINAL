@@ -83,7 +83,7 @@ export const CommoditiesView: React.FC<CommoditiesViewProps> = ({
                     {item.symbol} · Expiry: {item.expiry}
                   </span>
                   <div className="mt-1.5">
-                    <MarketStatusBadge segmentOrExchange="MCX" size="sm" />
+                    <MarketStatusBadge segmentOrExchange="MCX" size="xs" compact />
                   </div>
                 </div>
                 <div

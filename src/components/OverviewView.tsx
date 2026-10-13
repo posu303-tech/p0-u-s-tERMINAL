@@ -86,7 +86,7 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                     </div>
                     <p className="text-xs text-slate-400 mt-0.5">{idx.name}</p>
                     <div className="mt-1.5">
-                      <MarketStatusBadge segmentOrExchange={idx.segment} size="sm" />
+                      <MarketStatusBadge segmentOrExchange={idx.segment} size="xs" compact />
                     </div>
                   </div>
                   <div
@@ -279,12 +279,12 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                     <span className="font-bold text-white text-xs font-mono">{g.symbol}</span>
                     <span className="text-[10px] text-slate-400">· {g.sector}</span>
                   </div>
-                  <div className="flex items-center gap-2 mt-0.5">
+                  <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                     <span className="text-[10px] text-slate-500 font-mono">Vol: {(g.volume / 100000).toFixed(1)}L</span>
-                    <MarketStatusBadge segmentOrExchange={g.exchange} size="sm" />
+                    <MarketStatusBadge segmentOrExchange={g.exchange} size="xs" compact />
                   </div>
                 </div>
-                <div className="text-right font-mono">
+                <div className="text-right font-mono shrink-0 ml-2">
                   <div className="text-xs font-bold text-white tabular-nums">
                     ₹{g.ltp.toFixed(2)}
                   </div>
@@ -316,17 +316,17 @@ export const OverviewView: React.FC<OverviewViewProps> = ({
                 onClick={() => onSelectSymbolForChart(l.symbol)}
                 className="py-2.5 flex items-center justify-between hover:bg-slate-900/80 px-2 rounded-lg cursor-pointer transition-colors"
               >
-                <div>
+                <div className="min-w-0">
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-white text-xs font-mono">{l.symbol}</span>
                     <span className="text-[10px] text-slate-400">· {l.sector}</span>
                   </div>
-                  <div className="flex items-center gap-2 mt-0.5">
+                  <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
                     <span className="text-[10px] text-slate-500 font-mono">Vol: {(l.volume / 100000).toFixed(1)}L</span>
-                    <MarketStatusBadge segmentOrExchange={l.exchange} size="sm" />
+                    <MarketStatusBadge segmentOrExchange={l.exchange} size="xs" compact />
                   </div>
                 </div>
-                <div className="text-right font-mono">
+                <div className="text-right font-mono shrink-0 ml-2">
                   <div className="text-xs font-bold text-white tabular-nums">
                     ₹{l.ltp.toFixed(2)}
                   </div>

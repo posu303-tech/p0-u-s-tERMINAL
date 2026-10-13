@@ -415,9 +415,9 @@ export default function App() {
         isOffline={isOffline}
       />
 
-      {/* Real-Time Live Ticker Tape Strip */}
-      <div className="bg-slate-900/90 border-b border-slate-800/80 overflow-x-auto whitespace-nowrap py-1.5 px-4 text-xs font-mono scrollbar-none flex items-center justify-between gap-6">
-        <div className="flex items-center gap-6">
+      {/* Real-Time Live Ticker Tape Strip (Self-contained horizontal ticker) */}
+      <div className="w-full bg-slate-900/95 border-b border-slate-800/80 overflow-x-auto whitespace-nowrap py-1.5 px-3 sm:px-4 text-xs font-mono scrollbar-none">
+        <div className="flex items-center gap-5 sm:gap-6 min-w-max">
           {indices.map((idx) => {
             const isUp = idx.change >= 0;
             return (
@@ -442,11 +442,14 @@ export default function App() {
             );
           })}
         </div>
+      </div>
 
-        {/* Streaming Rate, Market Closed Freeze Notice & Simulation Toggle */}
-        <div className="flex items-center gap-2 shrink-0">
+      {/* Real-Time Streaming Controls & Market Status Bar (Always 100% visible on mobile & desktop) */}
+      <div className="w-full bg-slate-900/60 border-b border-slate-800/80 py-1.5 px-3 sm:px-4 text-xs font-mono flex flex-wrap items-center justify-between gap-2">
+        {/* Left: Market session status & simulation toggle */}
+        <div className="flex items-center gap-2 flex-wrap min-w-0">
           {!getAssetMarketStatus('NSE').isOpen && (
-            <div className="flex items-center gap-1.5">
+            <div className="flex items-center gap-1.5 flex-wrap">
               <span
                 className={`px-2 py-0.5 rounded text-[10px] sm:text-[11px] font-mono border flex items-center gap-1.5 ${
                   simulateOffMarket
@@ -460,7 +463,7 @@ export default function App() {
                 }
               >
                 <span
-                  className={`w-1.5 h-1.5 rounded-full ${
+                  className={`w-1.5 h-1.5 rounded-full shrink-0 ${
                     simulateOffMarket ? 'bg-amber-400 animate-ping' : 'bg-rose-500'
                   }`}
                 />
@@ -474,7 +477,7 @@ export default function App() {
 
               <button
                 onClick={() => setSimulateOffMarket(!simulateOffMarket)}
-                className={`px-2 py-0.5 rounded text-[10px] sm:text-[11px] font-mono border transition-colors ${
+                className={`px-2 py-0.5 rounded text-[10px] sm:text-[11px] font-mono border transition-colors shrink-0 ${
                   simulateOffMarket
                     ? 'bg-amber-500/20 border-amber-600 text-amber-200 hover:bg-amber-500/30'
                     : 'bg-cyan-950/60 border-cyan-800/80 text-cyan-300 hover:bg-cyan-900/60'
@@ -489,10 +492,13 @@ export default function App() {
               </button>
             </div>
           )}
+        </div>
 
+        {/* Right: Stream toggle & Tick Speed Selector */}
+        <div className="flex items-center gap-2 shrink-0 ml-auto">
           <button
             onClick={() => setIsStreaming(!isStreaming)}
-            className={`px-2 py-0.5 rounded text-[11px] font-semibold flex items-center gap-1 transition-colors ${
+            className={`px-2 py-0.5 rounded text-[11px] font-semibold flex items-center gap-1 transition-colors shrink-0 ${
               isStreaming
                 ? 'bg-slate-800 text-slate-300 hover:text-white'
                 : 'bg-emerald-600 text-white'
@@ -506,7 +512,7 @@ export default function App() {
           <select
             value={tickSpeed}
             onChange={(e) => setTickSpeed(Number(e.target.value))}
-            className="bg-slate-950 border border-slate-800 rounded px-1.5 py-0.5 text-[11px] text-slate-400 font-mono"
+            className="bg-slate-950 border border-slate-800 rounded px-1.5 py-0.5 text-[11px] text-slate-400 font-mono shrink-0"
             title="Tick Rate Frequency"
           >
             <option value={1000}>1.0s Tick</option>

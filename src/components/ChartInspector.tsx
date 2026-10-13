@@ -280,13 +280,11 @@ export const ChartInspector: React.FC<ChartInspectorProps> = ({
 
   const isUp = change >= 0;
 
-  // Sessions across timeline (Asian, London, US, Late, Asian)
+  // Sessions across timeline well-spaced so they never collide with the Next Session badge
   const sessions = [
-    { name: 'Asian', xRatio: 0.12 },
-    { name: 'London', xRatio: 0.35 },
-    { name: 'US', xRatio: 0.58 },
-    { name: 'Late', xRatio: 0.78 },
-    { name: 'Asian', xRatio: 0.94 },
+    { name: 'Asian', xRatio: 0.15 },
+    { name: 'London', xRatio: 0.40 },
+    { name: 'US', xRatio: 0.65 },
   ];
 
   // Area path
@@ -303,30 +301,30 @@ export const ChartInspector: React.FC<ChartInspectorProps> = ({
       className={`transition-all duration-200 select-none ${
         isMaximized
           ? 'fixed inset-0 z-50 w-screen h-screen bg-[#070b0e] text-slate-100 flex flex-col overflow-hidden'
-          : 'w-full rounded-2xl border border-slate-800 bg-[#070b0e] text-slate-100 shadow-2xl p-4'
+          : 'w-full rounded-2xl border border-slate-800 bg-[#070b0e] text-slate-100 shadow-2xl p-2 sm:p-4'
       }`}
     >
-      {/* Top Bar Header */}
-      <div className="flex flex-wrap sm:flex-nowrap items-center justify-between gap-2 px-3 sm:px-4 py-2 border-b border-slate-800/80 bg-[#070b0e] relative">
-        {/* Left: Live Ticker Identity, Market Status & Timeframe Dropdown */}
-        <div className="flex flex-wrap items-center gap-2 shrink-0">
-          <div className="flex items-center gap-1.5">
-            <span className="text-xs font-mono text-slate-300 font-semibold tracking-wide">
+      {/* Top Bar Header - Multi-tiered mobile-responsive layout where all buttons stay inside screen */}
+      <div className="flex flex-col gap-2 px-2.5 sm:px-4 py-2 border-b border-slate-800/80 bg-[#070b0e] w-full max-w-full">
+        {/* Tier 1: Symbol, Market Status, Timeframe Dropdown, Live Price & Window Actions */}
+        <div className="flex items-center justify-between gap-2 w-full flex-wrap">
+          {/* Left: Ticker Symbol, Market Status, and Timeframe Selector */}
+          <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap min-w-0">
+            <span className="text-xs sm:text-sm font-mono text-slate-200 font-bold tracking-wide">
               {symbol}
             </span>
-          </div>
-          <MarketStatusBadge
-            segmentOrExchange={symbol.includes('MCX') ? 'MCX' : 'NSE'}
-            size="sm"
-          />
+            <MarketStatusBadge
+              segmentOrExchange={symbol.includes('MCX') ? 'MCX' : 'NSE'}
+              size="xs"
+              compact
+            />
 
-          {/* Timeframe Selection Dropdown (1m, 3m, 5m, 15, 30m, 1hr, 2hr, 4hr, 1day) */}
-          <div className="relative" ref={dropdownRef}>
-            <div className="flex items-center gap-1">
+            {/* Timeframe Selection Dropdown (1m, 3m, 5m, 15, 30m, 1hr, 2hr, 4hr, 1day) */}
+            <div className="relative" ref={dropdownRef}>
               <button
                 type="button"
                 onClick={() => setIsTimeframeOpen((prev) => !prev)}
-                className={`flex items-center gap-1.5 px-2 py-1 rounded-lg border font-mono text-xs font-semibold transition-all ${
+                className={`flex items-center gap-1 px-2 py-1 rounded-lg border font-mono text-xs font-semibold transition-all ${
                   isTimeframeOpen
                     ? 'bg-cyan-950/90 text-cyan-300 border-cyan-500 shadow-[0_0_12px_rgba(6,182,212,0.25)]'
                     : 'bg-slate-900/90 hover:bg-slate-800 text-slate-200 border-slate-700/80 hover:border-cyan-500/50'
@@ -336,7 +334,7 @@ export const ChartInspector: React.FC<ChartInspectorProps> = ({
                 aria-expanded={isTimeframeOpen}
               >
                 <Clock className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                <span className="text-[11px] text-slate-400 font-normal">TF:</span>
+                <span className="text-[10px] text-slate-400 hidden xs:inline font-normal">TF:</span>
                 <span className="text-white font-bold tracking-wide">
                   {TIMEFRAME_OPTIONS.find((t) => t.id === selectedTimeframe)?.label || selectedTimeframe}
                 </span>
@@ -347,195 +345,201 @@ export const ChartInspector: React.FC<ChartInspectorProps> = ({
                 />
               </button>
 
-              {/* Quick-Pick Popular Pills on wider screens */}
-              <div className="hidden lg:flex items-center gap-0.5 bg-slate-900/90 p-0.5 rounded-lg border border-slate-800">
-                {(['1m', '5m', '15', '1hr', '1day'] as const).map((quickId) => (
-                  <button
-                    key={quickId}
-                    type="button"
-                    onClick={() => handleTimeframeSelect(quickId)}
-                    className={`px-1.5 py-0.5 rounded text-[11px] font-mono font-medium transition-colors ${
-                      selectedTimeframe === quickId
-                        ? 'bg-cyan-950 text-cyan-300 font-bold border border-cyan-700/60'
-                        : 'text-slate-400 hover:text-white hover:bg-slate-800'
-                    }`}
-                  >
-                    {quickId}
-                  </button>
-                ))}
-              </div>
+              {/* Timeframe Dropdown Menu */}
+              {isTimeframeOpen && (
+                <div className="absolute left-0 top-full mt-1.5 w-52 sm:w-56 bg-[#0a1017] border border-slate-700/90 rounded-xl shadow-2xl py-1.5 z-50 backdrop-blur-md">
+                  <div className="px-3 py-1 text-[10px] font-mono uppercase tracking-wider text-slate-400 border-b border-slate-800/80 mb-1 flex items-center justify-between">
+                    <span>Chart Timeframe</span>
+                    <span className="text-[9px] text-cyan-400 font-semibold">9 Intervals</span>
+                  </div>
+
+                  <div className="max-h-60 overflow-y-auto py-0.5 space-y-0.5 px-1">
+                    {TIMEFRAME_OPTIONS.map((tf) => {
+                      const isSelected = selectedTimeframe === tf.id;
+                      return (
+                        <button
+                          key={tf.id}
+                          type="button"
+                          onClick={() => handleTimeframeSelect(tf.id)}
+                          className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-mono transition-colors text-left ${
+                            isSelected
+                              ? 'bg-cyan-950/90 text-cyan-300 font-bold border border-cyan-700/60'
+                              : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
+                          }`}
+                        >
+                          <div className="flex items-center gap-2">
+                            <span
+                              className={`w-10 font-bold ${
+                                isSelected ? 'text-cyan-400' : 'text-slate-200'
+                              }`}
+                            >
+                              {tf.label}
+                            </span>
+                            <span className="text-[11px] text-slate-400 truncate">
+                              {tf.fullLabel}
+                            </span>
+                          </div>
+                          {isSelected ? (
+                            <Check className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                          ) : (
+                            <span className="text-[10px] text-slate-500 font-sans hidden sm:inline">
+                              {tf.minutesDesc}
+                            </span>
+                          )}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              )}
             </div>
 
-            {/* Timeframe Dropdown Menu */}
-            {isTimeframeOpen && (
-              <div className="absolute left-0 top-full mt-1.5 w-56 bg-[#0a1017] border border-slate-700/90 rounded-xl shadow-2xl py-1.5 z-50 animate-in fade-in zoom-in-95 duration-150 backdrop-blur-md">
-                <div className="px-3 py-1 text-[10px] font-mono uppercase tracking-wider text-slate-400 border-b border-slate-800/80 mb-1 flex items-center justify-between">
-                  <span>Chart Timeframe</span>
-                  <span className="text-[9px] text-cyan-400 font-semibold">9 Intervals</span>
-                </div>
-
-                <div className="max-h-64 overflow-y-auto py-0.5 space-y-0.5 px-1">
-                  {TIMEFRAME_OPTIONS.map((tf) => {
-                    const isSelected = selectedTimeframe === tf.id;
-                    return (
-                      <button
-                        key={tf.id}
-                        type="button"
-                        onClick={() => handleTimeframeSelect(tf.id)}
-                        className={`w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-xs font-mono transition-colors text-left ${
-                          isSelected
-                            ? 'bg-cyan-950/90 text-cyan-300 font-bold border border-cyan-700/60'
-                            : 'text-slate-300 hover:bg-slate-800/80 hover:text-white'
-                        }`}
-                      >
-                        <div className="flex items-center gap-2">
-                          <span
-                            className={`w-10 font-bold ${
-                              isSelected ? 'text-cyan-400' : 'text-slate-200'
-                            }`}
-                          >
-                            {tf.label}
-                          </span>
-                          <span className="text-[11px] text-slate-400">
-                            {tf.fullLabel}
-                          </span>
-                        </div>
-                        {isSelected ? (
-                          <Check className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                        ) : (
-                          <span className="text-[10px] text-slate-500 font-sans">
-                            {tf.minutesDesc}
-                          </span>
-                        )}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
+            {technicals?.patternDetected && (
+              <span className="hidden xl:inline text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-950/80 text-cyan-300 border border-cyan-800/60">
+                {technicals.patternDetected}
+              </span>
             )}
           </div>
 
-          {technicals?.patternDetected && (
-            <span className="hidden xl:inline text-[10px] font-mono px-1.5 py-0.5 rounded bg-cyan-950/80 text-cyan-300 border border-cyan-800/60">
-              {technicals.patternDetected}
-            </span>
-          )}
-        </div>
+          {/* Right: Prominent Live LTP Display & Window Controls */}
+          <div className="flex items-center gap-2 shrink-0 ml-auto">
+            <div className="flex items-center gap-1 sm:gap-1.5 font-mono">
+              <span
+                className={`text-base sm:text-xl font-black tabular-nums tracking-tight ${
+                  isUp ? 'text-[#00e676]' : 'text-[#ff5252]'
+                }`}
+              >
+                ₹{currentPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
+              </span>
+              <span
+                className={`text-[10px] sm:text-xs tabular-nums font-bold ${
+                  isUp ? 'text-[#00e676]' : 'text-[#ff5252]'
+                }`}
+              >
+                ({isUp ? '+' : ''}
+                {changePercent.toFixed(2)}%)
+              </span>
+            </div>
 
-        {/* Center: Big Prominent Live LTP Display */}
-        <div className="flex md:absolute md:left-1/2 md:-translate-x-1/2 items-center gap-1.5 shrink-0">
-          <span
-            className={`text-lg sm:text-xl md:text-2xl font-black font-mono tabular-nums tracking-tight ${
-              isUp ? 'text-[#00e676]' : 'text-[#ff5252]'
-            }`}
-          >
-            {currentPrice.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
-          </span>
-          <span
-            className={`text-[11px] sm:text-xs font-mono tabular-nums font-bold ${
-              isUp ? 'text-[#00e676]' : 'text-[#ff5252]'
-            }`}
-          >
-            ({isUp ? '+' : ''}
-            {changePercent.toFixed(2)}%)
-          </span>
-        </div>
+            {/* Maximize / Restore Button */}
+            <button
+              onClick={() => setIsMaximized(!isMaximized)}
+              className="flex items-center gap-1 px-2 py-1 bg-slate-800/80 hover:bg-slate-700 text-white rounded-lg border border-slate-700 transition-colors font-semibold text-xs shrink-0"
+              title={isMaximized ? 'Restore to normal view (Esc)' : 'Maximize to full screen'}
+            >
+              {isMaximized ? (
+                <>
+                  <Minimize2 className="w-3.5 h-3.5 text-rose-400 shrink-0" />
+                  <span className="hidden sm:inline">Restore</span>
+                </>
+              ) : (
+                <>
+                  <Maximize2 className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
+                  <span className="hidden sm:inline">Max</span>
+                </>
+              )}
+            </button>
 
-        {/* Right: Chart Type Toggle, Zoom controls, Market Profile Toggle, Maximize / Restore Button */}
-        <div className="flex items-center gap-1 sm:gap-1.5 font-mono text-xs shrink-0">
-          {/* Chart Type Toggle: Candle vs Area */}
-          <div className="flex items-center bg-slate-900 rounded-lg border border-slate-800 p-0.5">
-            <button
-              onClick={() => setChartType('candle')}
-              className={`p-1 px-1.5 text-[11px] rounded transition-colors ${
-                chartType === 'candle'
-                  ? 'bg-cyan-950/90 text-cyan-300 font-bold border border-cyan-700/60'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-              title="Candlestick Chart"
-            >
-              <BarChart3 className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={() => setChartType('area')}
-              className={`p-1 px-1.5 text-[11px] rounded transition-colors ${
-                chartType === 'area'
-                  ? 'bg-cyan-950/90 text-cyan-300 font-bold border border-cyan-700/60'
-                  : 'text-slate-400 hover:text-slate-200'
-              }`}
-              title="Mountain / Area Chart"
-            >
-              <TrendingUp className="w-3.5 h-3.5" />
-            </button>
-          </div>
-
-          {/* Zoom controls */}
-          <div className="flex items-center bg-slate-900 rounded-lg border border-slate-800 p-0.5">
-            <button
-              onClick={() => setZoomLevel((z) => Math.max(0.6, z - 0.2))}
-              className="p-1 px-1.5 sm:px-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors"
-              title="Zoom out"
-            >
-              -
-            </button>
-            <button
-              onClick={() => setZoomLevel((z) => Math.min(2.5, z + 0.2))}
-              className="p-1 px-1.5 sm:px-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors"
-              title="Zoom in"
-            >
-              +
-            </button>
-            <button
-              onClick={() => setZoomLevel(1)}
-              className="hidden sm:inline-block p-1 px-2 text-[10px] sm:text-[11px] text-slate-300 hover:text-white hover:bg-slate-800 rounded transition-colors"
-              title="Reset zoom"
-            >
-              Reset
-            </button>
-          </div>
-
-          {/* Toggle Institutional Profile Lines */}
-          <button
-            onClick={() => setShowOrderProfile(!showOrderProfile)}
-            className={`px-2 py-1 rounded-lg border transition-colors hidden sm:flex items-center gap-1 text-[11px] ${
-              showOrderProfile
-                ? 'bg-cyan-950/80 border-cyan-700 text-cyan-300'
-                : 'bg-slate-900 border-slate-800 text-slate-400'
-            }`}
-            title="Toggle Call/Put Walls, VAH, POC, and VAL"
-          >
-            <Layers className="w-3 h-3" />
-            <span className="hidden md:inline">Profile</span>
-          </button>
-
-          {/* Maximize / Restore Button */}
-          <button
-            onClick={() => setIsMaximized(!isMaximized)}
-            className="flex items-center gap-1 px-2.5 sm:px-3 py-1 bg-slate-800/80 hover:bg-slate-700 text-white rounded-lg border border-slate-700 transition-colors font-semibold text-xs shrink-0"
-            title={isMaximized ? 'Restore to normal view (Esc)' : 'Maximize to full screen'}
-          >
-            {isMaximized ? (
-              <>
-                <X className="w-3.5 h-3.5 text-rose-400 shrink-0" />
-                <span>Restore</span>
-              </>
-            ) : (
-              <>
-                <Maximize2 className="w-3.5 h-3.5 text-cyan-400 shrink-0" />
-                <span>Maximize</span>
-              </>
+            {onClose && !isMaximized && (
+              <button
+                onClick={onClose}
+                className="p-1 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors shrink-0"
+                title="Close chart"
+              >
+                <X className="w-4 h-4" />
+              </button>
             )}
-          </button>
+          </div>
+        </div>
 
-          {onClose && !isMaximized && (
+        {/* Tier 2: Secondary Toolbar (Quick-Pick Pills, Chart Type Toggle, Zoom, Profile) */}
+        <div className="flex items-center justify-between gap-2 w-full flex-wrap pt-1 border-t border-slate-800/50">
+          {/* Quick-Pick Popular Pills (scrollable on smaller devices) */}
+          <div className="flex items-center gap-1 overflow-x-auto scrollbar-none py-0.5">
+            <span className="text-[10px] font-mono text-slate-500 uppercase mr-0.5 hidden xs:inline">TF:</span>
+            {(['1m', '3m', '5m', '15', '30m', '1hr', '2hr', '4hr', '1day'] as const).map((quickId) => (
+              <button
+                key={quickId}
+                type="button"
+                onClick={() => handleTimeframeSelect(quickId)}
+                className={`px-1.5 py-0.5 rounded text-[10px] font-mono transition-colors shrink-0 ${
+                  selectedTimeframe === quickId
+                    ? 'bg-cyan-950 text-cyan-300 font-bold border border-cyan-700/60'
+                    : 'text-slate-400 hover:text-white hover:bg-slate-800'
+                }`}
+              >
+                {quickId}
+              </button>
+            ))}
+          </div>
+
+          {/* Right Toolbar: Chart Type Toggle, Zoom, Market Profile Lines */}
+          <div className="flex items-center gap-1 sm:gap-1.5 font-mono text-xs ml-auto shrink-0">
+            {/* Chart Type Toggle: Candle vs Area */}
+            <div className="flex items-center bg-slate-900 rounded-lg border border-slate-800 p-0.5">
+              <button
+                onClick={() => setChartType('candle')}
+                className={`p-1 px-1.5 text-[11px] rounded transition-colors ${
+                  chartType === 'candle'
+                    ? 'bg-cyan-950/90 text-cyan-300 font-bold border border-cyan-700/60'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="Candlestick Chart"
+              >
+                <BarChart3 className="w-3.5 h-3.5" />
+              </button>
+              <button
+                onClick={() => setChartType('area')}
+                className={`p-1 px-1.5 text-[11px] rounded transition-colors ${
+                  chartType === 'area'
+                    ? 'bg-cyan-950/90 text-cyan-300 font-bold border border-cyan-700/60'
+                    : 'text-slate-400 hover:text-slate-200'
+                }`}
+                title="Mountain / Area Chart"
+              >
+                <TrendingUp className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* Zoom controls */}
+            <div className="flex items-center bg-slate-900 rounded-lg border border-slate-800 p-0.5">
+              <button
+                onClick={() => setZoomLevel((z) => Math.max(0.6, z - 0.2))}
+                className="p-1 px-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors"
+                title="Zoom out"
+              >
+                <ZoomOut className="w-3 h-3" />
+              </button>
+              <button
+                onClick={() => setZoomLevel((z) => Math.min(2.5, z + 0.2))}
+                className="p-1 px-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors"
+                title="Zoom in"
+              >
+                <ZoomIn className="w-3 h-3" />
+              </button>
+              <button
+                onClick={() => setZoomLevel(1)}
+                className="p-1 px-1.5 text-[10px] text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors"
+                title="Reset zoom"
+              >
+                <RotateCcw className="w-3 h-3" />
+              </button>
+            </div>
+
+            {/* Toggle Institutional Profile Lines */}
             <button
-              onClick={onClose}
-              className="p-1 text-slate-400 hover:text-white hover:bg-slate-800 rounded-lg transition-colors ml-0.5"
-              title="Close chart"
+              onClick={() => setShowOrderProfile(!showOrderProfile)}
+              className={`px-2 py-1 rounded-lg border transition-colors flex items-center gap-1 text-[10px] sm:text-[11px] ${
+                showOrderProfile
+                  ? 'bg-cyan-950/80 border-cyan-700 text-cyan-300'
+                  : 'bg-slate-900 border-slate-800 text-slate-400'
+              }`}
+              title="Toggle Call/Put Walls, VAH, POC, and VAL"
             >
-              <X className="w-4 h-4" />
+              <Layers className="w-3 h-3" />
+              <span className="hidden sm:inline">Profile</span>
             </button>
-          )}
+          </div>
         </div>
       </div>
 
@@ -1035,25 +1039,40 @@ export const ChartInspector: React.FC<ChartInspectorProps> = ({
             strokeWidth="1"
           />
 
-          {/* Time markers adapted to timeframe */}
-          {points.map((p, idx) => {
-            const step = Math.max(1, Math.floor(points.length / 5));
-            if (idx % step !== 0 && idx !== points.length - 1) return null;
-            const x = getX(idx);
-            return (
-              <text
-                key={`time-lbl-${idx}`}
-                x={x}
-                y={paddingTop + chartH + 16}
-                fill="#64748b"
-                fontSize="10"
-                textAnchor="middle"
-                fontFamily="JetBrains Mono, monospace"
-              >
-                {p.time}
-              </text>
-            );
-          })}
+          {/* Time markers adapted to timeframe - strictly non-overlapping */}
+          {(() => {
+            if (points.length === 0) return null;
+            // Generate evenly-spaced internal indices that never collide
+            const numLabels = 4;
+            const step = Math.floor((points.length - 1) / (numLabels + 1));
+            const validIndices: number[] = [];
+            for (let i = 1; i <= numLabels; i++) {
+              const idx = i * step;
+              if (idx > 0 && idx < points.length - 1) {
+                validIndices.push(idx);
+              }
+            }
+
+            return validIndices.map((idx) => {
+              const p = points[idx];
+              const x = getX(idx);
+              // Avoid rendering if too close to right edge LIVE badge
+              if (x > width - paddingRight - 100) return null;
+              return (
+                <text
+                  key={`time-lbl-${idx}`}
+                  x={x}
+                  y={paddingTop + chartH + 16}
+                  fill="#64748b"
+                  fontSize="10"
+                  textAnchor="middle"
+                  fontFamily="JetBrains Mono, monospace"
+                >
+                  {p.time}
+                </text>
+              );
+            });
+          })()}
 
           {/* Rightmost Timestamp badge matching current candle bar */}
           <g>
@@ -1079,26 +1098,28 @@ export const ChartInspector: React.FC<ChartInspectorProps> = ({
         </svg>
       </div>
 
-      {/* Floating Readout Bar */}
-      <div className="px-4 py-2 border-t border-slate-800 bg-[#070b0e] flex flex-wrap items-center justify-between text-xs font-mono text-slate-400 gap-2">
-        <div className="flex flex-wrap items-center gap-3 sm:gap-4">
-          <span className="text-cyan-400 font-bold bg-cyan-950/60 px-1.5 py-0.5 rounded border border-cyan-800/40">
+      {/* Floating Readout Bar (Responsive & clean on mobile & desktop) */}
+      <div className="px-3 sm:px-4 py-2 border-t border-slate-800 bg-[#070b0e] flex flex-wrap items-center justify-between text-[11px] sm:text-xs font-mono text-slate-400 gap-2 w-full overflow-hidden">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-4">
+          <span className="text-cyan-400 font-bold bg-cyan-950/60 px-1.5 py-0.5 rounded border border-cyan-800/40 shrink-0">
             {selectedTimeframe}
           </span>
-          <span>O: ₹{(hoveredPoint?.open || points[points.length - 1]?.open || 0).toFixed(2)}</span>
-          <span className="text-emerald-400">H: ₹{(hoveredPoint?.high || points[points.length - 1]?.high || 0).toFixed(2)}</span>
-          <span className="text-rose-400">L: ₹{(hoveredPoint?.low || points[points.length - 1]?.low || 0).toFixed(2)}</span>
-          <span>C: ₹{(hoveredPoint?.close || points[points.length - 1]?.close || 0).toFixed(2)}</span>
-          <span>Vol: {(hoveredPoint?.volume || points[points.length - 1]?.volume || 0).toLocaleString('en-IN')}</span>
+          <span className="shrink-0">O: ₹{(hoveredPoint?.open || points[points.length - 1]?.open || 0).toFixed(2)}</span>
+          <span className="text-emerald-400 shrink-0">H: ₹{(hoveredPoint?.high || points[points.length - 1]?.high || 0).toFixed(2)}</span>
+          <span className="text-rose-400 shrink-0">L: ₹{(hoveredPoint?.low || points[points.length - 1]?.low || 0).toFixed(2)}</span>
+          <span className="shrink-0">C: ₹{(hoveredPoint?.close || points[points.length - 1]?.close || 0).toFixed(2)}</span>
+          <span className="shrink-0">Vol: {(hoveredPoint?.volume || points[points.length - 1]?.volume || 0).toLocaleString('en-IN')}</span>
         </div>
 
-        <div className="flex flex-wrap items-center gap-3 sm:gap-4 text-[11px]">
-          <span className="text-purple-400">Call Wall: ₹{callWall.toFixed(2)}</span>
-          <span className="text-cyan-400">VAH: ₹{vahLevel.toFixed(2)}</span>
-          <span className="text-sky-400">POC: ₹{pocLevel.toFixed(2)}</span>
-          <span className="text-rose-400">VAL: ₹{valLevel.toFixed(2)}</span>
-          <span className="text-pink-400">Put Wall: ₹{putWall.toFixed(2)}</span>
-        </div>
+        {showOrderProfile && (
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 text-[10px] sm:text-[11px] shrink-0">
+            <span className="text-purple-400">CW: ₹{callWall.toFixed(2)}</span>
+            <span className="text-cyan-400">VAH: ₹{vahLevel.toFixed(2)}</span>
+            <span className="text-sky-400">POC: ₹{pocLevel.toFixed(2)}</span>
+            <span className="text-rose-400">VAL: ₹{valLevel.toFixed(2)}</span>
+            <span className="text-pink-400">PW: ₹{putWall.toFixed(2)}</span>
+          </div>
+        )}
       </div>
     </div>
   );

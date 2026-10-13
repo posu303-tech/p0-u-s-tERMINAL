@@ -160,11 +160,11 @@ export const EquitiesView: React.FC<EquitiesViewProps> = ({
                       className="p-3 font-sans"
                       onClick={() => onSelectSymbolForChart(eq.symbol)}
                     >
-                      <div className="flex items-center gap-2">
+                      <div className="flex items-center gap-1.5 flex-wrap">
                         <span className="font-bold text-white text-xs group-hover:text-cyan-400 transition-colors font-mono">
                           {eq.symbol}
                         </span>
-                        <MarketStatusBadge segmentOrExchange={eq.exchange} size="sm" />
+                        <MarketStatusBadge segmentOrExchange={eq.exchange} size="xs" compact />
                       </div>
                       <div className="text-[11px] text-slate-400 font-sans line-clamp-1 mt-0.5">
                         {eq.name}

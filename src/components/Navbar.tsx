@@ -215,20 +215,20 @@ export const Navbar: React.FC<NavbarProps> = ({
 
       {/* Compliance & Market Status Sub-strip */}
       <div className="bg-slate-900/80 border-t border-slate-800/80 px-3 sm:px-4 py-1 text-[10px] sm:text-[11px] flex items-center justify-between font-mono text-slate-400 gap-2 flex-wrap">
-        <div className="flex items-center gap-2 overflow-hidden text-ellipsis whitespace-nowrap">
+        <div className="flex items-center gap-1.5 overflow-hidden text-ellipsis whitespace-nowrap min-w-0 max-w-[200px] sm:max-w-none">
           <span className="text-amber-400 font-semibold truncate">{t.monitoringOnlyNotice}</span>
           <span className="hidden md:inline text-slate-500">·</span>
           <span className="hidden md:inline text-slate-400">SEBI Non-Execution Analytics Compliant</span>
         </div>
-        <div className="flex items-center gap-2.5 text-slate-400 shrink-0 text-[10px] ml-auto">
-          <div className="flex items-center gap-1.5">
+        <div className="flex items-center gap-2 text-slate-400 shrink-0 text-[10px] ml-auto">
+          <div className="flex items-center gap-1">
             <span className="text-slate-500 font-bold">NSE:</span>
-            <MarketStatusBadge segmentOrExchange="NSE" size="sm" />
+            <MarketStatusBadge segmentOrExchange="NSE" size="xs" compact />
           </div>
           <span className="text-slate-700">|</span>
-          <div className="flex items-center gap-1.5">
+          <div className="flex items-center gap-1">
             <span className="text-slate-500 font-bold">MCX:</span>
-            <MarketStatusBadge segmentOrExchange="MCX" size="sm" />
+            <MarketStatusBadge segmentOrExchange="MCX" size="xs" compact />
           </div>
         </div>
       </div>

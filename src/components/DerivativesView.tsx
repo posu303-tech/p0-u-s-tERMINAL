@@ -134,10 +134,10 @@ export const DerivativesView: React.FC<DerivativesViewProps> = ({
             <span className="font-bold text-white tabular-nums px-2 py-0.5 rounded bg-slate-800">
               ₹{chain.underlyingLTP.toLocaleString('en-IN', { minimumFractionDigits: 2 })}
             </span>
-            <MarketStatusBadge segmentOrExchange="NSE" size="sm" />
+            <MarketStatusBadge segmentOrExchange="NSE" size="xs" compact />
             <button
               onClick={() => onSelectSymbolForChart(selectedUnderlying === 'NIFTY' ? 'NIFTY 50' : selectedUnderlying)}
-              className="text-cyan-400 hover:underline text-[11px] font-sans ml-1"
+              className="text-cyan-400 hover:underline text-[11px] font-sans ml-1 shrink-0"
             >
               Inspect Chart →
             </button>
