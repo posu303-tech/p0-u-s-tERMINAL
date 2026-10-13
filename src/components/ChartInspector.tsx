@@ -17,6 +17,7 @@ import {
   ChevronLeft,
   ChevronRight,
   Move,
+  ArrowUpDown,
 } from 'lucide-react';
 import { MarketStatusBadge } from './MarketStatusBadge';
 
@@ -71,6 +72,12 @@ export const ChartInspector: React.FC<ChartInspectorProps> = ({
   const [zoomLevel, setZoomLevel] = useState(1);
   const [panOffsetBars, setPanOffsetBars] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+
+  // Price Axis Vertical Zoom & Pan State
+  const [priceZoomLevel, setPriceZoomLevel] = useState(1);
+  const [priceOffset, setPriceOffset] = useState(0);
+  const [isPriceDragging, setIsPriceDragging] = useState(false);
+
   const [chartType, setChartType] = useState<'candle' | 'area'>('candle');
   const [showOrderProfile, setShowOrderProfile] = useState(true);
   const [showSMA20, setShowSMA20] = useState(false);
@@ -88,11 +95,24 @@ export const ChartInspector: React.FC<ChartInspectorProps> = ({
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
 
-  // Dragging and touch references for pan & pinch-zoom
+  // Dragging and touch references for timeline pan & price axis vertical zoom
   const isDraggingRef = useRef(false);
   const dragStartXRef = useRef(0);
   const dragStartPanRef = useRef(0);
-  const touchStartRef = useRef<{ x: number; y: number; dist?: number; pan: number }>({ x: 0, y: 0, pan: 0 });
+
+  const isPriceDraggingRef = useRef(false);
+  const priceDragStartYRef = useRef(0);
+  const priceDragStartZoomRef = useRef(1);
+  const priceDragStartOffsetRef = useRef(0);
+
+  const touchStartRef = useRef<{
+    x: number;
+    y: number;
+    dist?: number;
+    pan: number;
+    isPriceTouch?: boolean;
+    startPriceZoom?: number;
+  }>({ x: 0, y: 0, pan: 0 });
 
   // Reset pan offset when symbol or timeframe changes
   useEffect(() => {
@@ -119,12 +139,16 @@ export const ChartInspector: React.FC<ChartInspectorProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isTimeframeOpen]);
 
-  // Global mouseup listener to guarantee drag ends smoothly
+  // Global mouseup listener to guarantee drag ends smoothly across both timeline and price axis
   useEffect(() => {
     const handleGlobalMouseUp = () => {
       if (isDraggingRef.current) {
         isDraggingRef.current = false;
         setIsDragging(false);
+      }
+      if (isPriceDraggingRef.current) {
+        isPriceDraggingRef.current = false;
+        setIsPriceDragging(false);
       }
     };
     window.addEventListener('mouseup', handleGlobalMouseUp);
@@ -154,6 +178,13 @@ export const ChartInspector: React.FC<ChartInspectorProps> = ({
   const handleResetZoomPan = useCallback(() => {
     setZoomLevel(1);
     setPanOffsetBars(0);
+    setPriceZoomLevel(1);
+    setPriceOffset(0);
+  }, []);
+
+  const handleResetPriceZoom = useCallback(() => {
+    setPriceZoomLevel(1);
+    setPriceOffset(0);
   }, []);
 
   // Visible points count based on current zoomLevel
@@ -341,12 +372,19 @@ export const ChartInspector: React.FC<ChartInspectorProps> = ({
 
   if (points.length === 0) return null;
 
-  // Price boundaries
+  // Price boundaries with priceZoomLevel and vertical scaling
   const rawMin = Math.min(...points.map((p) => p.low));
   const rawMax = Math.max(...points.map((p) => p.high));
   const padding = (rawMax - rawMin) * 0.08 || currentPrice * 0.02;
-  const minPrice = rawMin - padding;
-  const maxPrice = rawMax + padding;
+  const baseMinPrice = rawMin - padding;
+  const baseMaxPrice = rawMax + padding;
+  const baseRange = baseMaxPrice - baseMinPrice || 1;
+
+  // Zoomed price range centered on visible range midpoint
+  const centerPrice = (baseMinPrice + baseMaxPrice) / 2 + priceOffset;
+  const halfRange = (baseRange / 2) / priceZoomLevel;
+  const minPrice = centerPrice - halfRange;
+  const maxPrice = centerPrice + halfRange;
   const priceRange = maxPrice - minPrice || 1;
 
   // Institutional Order Flow Levels (Market Profile / Volume Profile)
@@ -360,7 +398,7 @@ export const ChartInspector: React.FC<ChartInspectorProps> = ({
   const width = isMaximized ? 1440 : 1100;
   const height = isMaximized ? 720 : 420;
   const paddingLeft = 30;
-  const paddingRight = 110; // Extra room for right-side price pills
+  const paddingRight = 110; // Room for right-side price pills and price axis zoom drag
   const paddingTop = 36;
   const paddingBottom = 40;
 
@@ -387,13 +425,25 @@ export const ChartInspector: React.FC<ChartInspectorProps> = ({
   }, '');
   const areaClosed = `${areaPath} L ${getX(points.length - 1)} ${paddingTop + chartH} L ${getX(0)} ${paddingTop + chartH} Z`;
 
-  // Mouse drag for panning horizontal timeline & hover coordinate tracking
+  // Mouse drag for panning horizontal timeline OR zooming price axis vertically
   const handleMouseDown = (e: React.MouseEvent<SVGSVGElement>) => {
     if (e.button !== 0) return; // Only primary mouse button
-    isDraggingRef.current = true;
-    dragStartXRef.current = e.clientX;
-    dragStartPanRef.current = panOffsetBars;
-    setIsDragging(true);
+    const rect = e.currentTarget.getBoundingClientRect();
+    const svgX = ((e.clientX - rect.left) / rect.width) * width;
+
+    // Check if mouse down occurred in the right-side Price Axis region
+    if (svgX >= width - paddingRight - 8) {
+      isPriceDraggingRef.current = true;
+      setIsPriceDragging(true);
+      priceDragStartYRef.current = e.clientY;
+      priceDragStartZoomRef.current = priceZoomLevel;
+      priceDragStartOffsetRef.current = priceOffset;
+    } else {
+      isDraggingRef.current = true;
+      setIsDragging(true);
+      dragStartXRef.current = e.clientX;
+      dragStartPanRef.current = panOffsetBars;
+    }
   };
 
   const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
@@ -402,7 +452,16 @@ export const ChartInspector: React.FC<ChartInspectorProps> = ({
     const svgY = ((e.clientY - rect.top) / rect.height) * height;
     setCursorPos({ x: svgX, y: svgY });
 
-    if (isDraggingRef.current) {
+    if (isPriceDraggingRef.current) {
+      // User is dragging vertically on the price axis to stretch or compress scale
+      const deltaY = e.clientY - priceDragStartYRef.current;
+      // Dragging upward (negative deltaY) increases zoom / expands scale
+      // Dragging downward (positive deltaY) decreases zoom / compresses scale
+      const sensitivity = 0.007;
+      const zoomFactor = 1 - deltaY * sensitivity;
+      const newPriceZoom = Math.max(0.3, Math.min(5.0, +(priceDragStartZoomRef.current * zoomFactor).toFixed(2)));
+      setPriceZoomLevel(newPriceZoom);
+    } else if (isDraggingRef.current) {
       const deltaX = e.clientX - dragStartXRef.current;
       const candleScreenPx = rect.width / visibleCount;
       if (candleScreenPx > 0) {
@@ -425,19 +484,36 @@ export const ChartInspector: React.FC<ChartInspectorProps> = ({
 
   const handleMouseUp = () => {
     isDraggingRef.current = false;
+    isPriceDraggingRef.current = false;
     setIsDragging(false);
+    setIsPriceDragging(false);
   };
 
   const handleMouseLeave = () => {
     isDraggingRef.current = false;
+    isPriceDraggingRef.current = false;
     setIsDragging(false);
+    setIsPriceDragging(false);
     setCursorPos(null);
     setHoveredPoint(null);
   };
 
-  // Mouse wheel: Vertical scroll or pinch zooms in/out; Horizontal scroll pans timeline
+  // Mouse wheel: If over price axis -> zoom price vertically; Else -> zoom timeline or pan
   const handleWheel = (e: React.WheelEvent<SVGSVGElement>) => {
     e.preventDefault();
+    const rect = e.currentTarget.getBoundingClientRect();
+    const svgX = ((e.clientX - rect.left) / rect.width) * width;
+
+    // Direct wheel scroll on Price Axis zooms the price axis
+    if (svgX >= width - paddingRight - 8) {
+      if (e.deltaY < 0) {
+        setPriceZoomLevel((pz) => Math.min(5.0, +(pz + 0.15).toFixed(2)));
+      } else {
+        setPriceZoomLevel((pz) => Math.max(0.3, +(pz - 0.15).toFixed(2)));
+      }
+      return;
+    }
+
     if (e.ctrlKey || Math.abs(e.deltaY) >= Math.abs(e.deltaX)) {
       if (e.deltaY < 0) {
         setZoomLevel((z) => Math.min(3.0, +(z + 0.15).toFixed(2)));
@@ -450,39 +526,108 @@ export const ChartInspector: React.FC<ChartInspectorProps> = ({
     }
   };
 
-  // Touch handlers for mobile devices: 1 touch = pan drag, 2 touches = pinch zoom
+  // Double click on price axis resets to auto-scale
+  const handleDoubleClick = (e: React.MouseEvent<SVGSVGElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const svgX = ((e.clientX - rect.left) / rect.width) * width;
+    if (svgX >= width - paddingRight - 8) {
+      handleResetPriceZoom();
+    }
+  };
+
+  // Touch handlers for mobile devices:
+  // - 1 touch on price axis = vertical price scale zoom
+  // - 1 touch on chart = timeline pan drag & crosshair tracking
+  // - 2 touches on price axis = vertical pinch price zoom
+  // - 2 touches on chart = timeline pinch zoom
   const handleTouchStart = (e: React.TouchEvent<SVGSVGElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
     if (e.touches.length === 1) {
-      isDraggingRef.current = true;
-      setIsDragging(true);
-      touchStartRef.current = {
-        x: e.touches[0].clientX,
-        y: e.touches[0].clientY,
-        pan: panOffsetBars,
-      };
+      const touch = e.touches[0];
+      const svgX = ((touch.clientX - rect.left) / rect.width) * width;
+      const svgY = ((touch.clientY - rect.top) / rect.height) * height;
+      setCursorPos({ x: svgX, y: svgY });
+
+      // Determine if touch started on right Price Axis area
+      const isPriceTouch = svgX >= width - paddingRight - 15;
+      if (isPriceTouch) {
+        isPriceDraggingRef.current = true;
+        setIsPriceDragging(true);
+        priceDragStartYRef.current = touch.clientY;
+        priceDragStartZoomRef.current = priceZoomLevel;
+        touchStartRef.current = {
+          x: touch.clientX,
+          y: touch.clientY,
+          pan: panOffsetBars,
+          isPriceTouch: true,
+          startPriceZoom: priceZoomLevel,
+        };
+      } else {
+        isDraggingRef.current = true;
+        setIsDragging(true);
+        touchStartRef.current = {
+          x: touch.clientX,
+          y: touch.clientY,
+          pan: panOffsetBars,
+          isPriceTouch: false,
+        };
+        // Update hovered point for crosshair
+        if (svgX >= paddingLeft && svgX <= width - paddingRight && points.length > 0) {
+          const ratio = (svgX - paddingLeft) / chartW;
+          const index = Math.round(ratio * (points.length - 1));
+          const clampedIndex = Math.max(0, Math.min(points.length - 1, index));
+          setHoveredPoint(points[clampedIndex] || null);
+        }
+      }
     } else if (e.touches.length === 2) {
       const dist = Math.hypot(
         e.touches[0].clientX - e.touches[1].clientX,
         e.touches[0].clientY - e.touches[1].clientY
       );
+      const touchMidX = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+      const svgMidX = ((touchMidX - rect.left) / rect.width) * width;
+      const isPricePinch = svgMidX >= width - paddingRight - 20;
+
       touchStartRef.current = {
-        x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+        x: touchMidX,
         y: (e.touches[0].clientY + e.touches[1].clientY) / 2,
         dist,
         pan: panOffsetBars,
+        isPriceTouch: isPricePinch,
+        startPriceZoom: priceZoomLevel,
       };
     }
   };
 
   const handleTouchMove = (e: React.TouchEvent<SVGSVGElement>) => {
     const rect = e.currentTarget.getBoundingClientRect();
-    if (e.touches.length === 1 && isDraggingRef.current) {
-      const deltaX = e.touches[0].clientX - touchStartRef.current.x;
-      const candleScreenPx = rect.width / visibleCount;
-      if (candleScreenPx > 0) {
-        const barsShift = Math.round(deltaX / candleScreenPx);
-        const newPan = Math.max(0, Math.min(maxPan, touchStartRef.current.pan + barsShift));
-        setPanOffsetBars(newPan);
+    if (e.touches.length === 1) {
+      const touch = e.touches[0];
+      const svgX = ((touch.clientX - rect.left) / rect.width) * width;
+      const svgY = ((touch.clientY - rect.top) / rect.height) * height;
+      setCursorPos({ x: svgX, y: svgY });
+
+      if (isPriceDraggingRef.current) {
+        // Vertical price drag zoom on mobile
+        const deltaY = touch.clientY - priceDragStartYRef.current;
+        const sensitivity = 0.007;
+        const zoomFactor = 1 - deltaY * sensitivity;
+        const newPriceZoom = Math.max(0.3, Math.min(5.0, +(priceDragStartZoomRef.current * zoomFactor).toFixed(2)));
+        setPriceZoomLevel(newPriceZoom);
+      } else if (isDraggingRef.current) {
+        const deltaX = touch.clientX - touchStartRef.current.x;
+        const candleScreenPx = rect.width / visibleCount;
+        if (candleScreenPx > 0) {
+          const barsShift = Math.round(deltaX / candleScreenPx);
+          const newPan = Math.max(0, Math.min(maxPan, touchStartRef.current.pan + barsShift));
+          setPanOffsetBars(newPan);
+        }
+        if (svgX >= paddingLeft && svgX <= width - paddingRight && points.length > 0) {
+          const ratio = (svgX - paddingLeft) / chartW;
+          const index = Math.round(ratio * (points.length - 1));
+          const clampedIndex = Math.max(0, Math.min(points.length - 1, index));
+          setHoveredPoint(points[clampedIndex] || null);
+        }
       }
     } else if (e.touches.length === 2 && touchStartRef.current.dist) {
       const newDist = Math.hypot(
@@ -490,19 +635,34 @@ export const ChartInspector: React.FC<ChartInspectorProps> = ({
         e.touches[0].clientY - e.touches[1].clientY
       );
       const ratio = newDist / touchStartRef.current.dist;
-      if (ratio > 1.05) {
-        setZoomLevel((z) => Math.min(3.0, +(z + 0.08).toFixed(2)));
-        touchStartRef.current.dist = newDist;
-      } else if (ratio < 0.95) {
-        setZoomLevel((z) => Math.max(0.5, +(z - 0.08).toFixed(2)));
-        touchStartRef.current.dist = newDist;
+
+      if (touchStartRef.current.isPriceTouch) {
+        // Vertical price pinch zoom
+        if (ratio > 1.05) {
+          setPriceZoomLevel((pz) => Math.min(5.0, +(pz + 0.08).toFixed(2)));
+          touchStartRef.current.dist = newDist;
+        } else if (ratio < 0.95) {
+          setPriceZoomLevel((pz) => Math.max(0.3, +(pz - 0.08).toFixed(2)));
+          touchStartRef.current.dist = newDist;
+        }
+      } else {
+        // Timeline pinch zoom
+        if (ratio > 1.05) {
+          setZoomLevel((z) => Math.min(3.0, +(z + 0.08).toFixed(2)));
+          touchStartRef.current.dist = newDist;
+        } else if (ratio < 0.95) {
+          setZoomLevel((z) => Math.max(0.5, +(z - 0.08).toFixed(2)));
+          touchStartRef.current.dist = newDist;
+        }
       }
     }
   };
 
   const handleTouchEnd = () => {
     isDraggingRef.current = false;
+    isPriceDraggingRef.current = false;
     setIsDragging(false);
+    setIsPriceDragging(false);
   };
 
   return (
@@ -733,19 +893,20 @@ export const ChartInspector: React.FC<ChartInspectorProps> = ({
               </button>
             </div>
 
-            {/* Zoom controls with percentage indicator */}
-            <div className="flex items-center bg-slate-900 rounded-lg border border-slate-800 p-0.5">
+            {/* Timeline Zoom controls with percentage indicator */}
+            <div className="flex items-center bg-slate-900 rounded-lg border border-slate-800 p-0.5" title="Timeline Zoom (Bar count)">
+              <span className="text-[9px] font-mono text-slate-500 uppercase px-0.5 hidden xs:inline">Time</span>
               <button
                 type="button"
                 onClick={() => setZoomLevel((z) => Math.max(0.5, +(z - 0.2).toFixed(2)))}
                 className="p-1 px-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors"
-                title="Zoom out (see more bars / wider horizon)"
+                title="Zoom out timeline (see more bars / wider horizon)"
               >
                 <ZoomOut className="w-3 h-3" />
               </button>
               <span
                 className="text-[10px] font-mono font-bold text-cyan-400 px-1 select-none tabular-nums"
-                title="Current Zoom Level"
+                title="Current Time Zoom Level"
               >
                 {Math.round(zoomLevel * 100)}%
               </span>
@@ -753,23 +914,66 @@ export const ChartInspector: React.FC<ChartInspectorProps> = ({
                 type="button"
                 onClick={() => setZoomLevel((z) => Math.min(3.0, +(z + 0.2).toFixed(2)))}
                 className="p-1 px-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors"
-                title="Zoom in (see fewer bars / high detail)"
+                title="Zoom in timeline (see fewer bars / high detail)"
               >
                 <ZoomIn className="w-3 h-3" />
               </button>
+            </div>
+
+            {/* Price Scale Vertical Zoom controls */}
+            <div className="flex items-center bg-slate-900 rounded-lg border border-slate-800 p-0.5" title="Price Axis Zoom (stretch/compress candles vertically, or drag right price scale)">
+              <span className="text-[9px] font-mono text-slate-400 px-1 font-semibold flex items-center gap-0.5">
+                <ArrowUpDown className="w-2.5 h-2.5 text-emerald-400" />
+                <span className="hidden sm:inline">Price</span>
+              </span>
               <button
                 type="button"
-                onClick={handleResetZoomPan}
-                className={`p-1 px-1.5 text-[10px] rounded transition-colors ${
-                  zoomLevel !== 1 || effectivePan !== 0
-                    ? 'text-cyan-400 hover:text-cyan-300 hover:bg-cyan-950/60 font-bold'
-                    : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'
-                }`}
-                title="Reset zoom & pan to live edge (100% / Home / 0)"
+                onClick={() => setPriceZoomLevel((z) => Math.max(0.3, +(z - 0.2).toFixed(2)))}
+                className="p-1 px-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors"
+                title="Compress price scale (Zoom Out Price Axis)"
               >
-                <RotateCcw className="w-3 h-3" />
+                <ZoomOut className="w-3 h-3" />
               </button>
+              <span
+                className="text-[10px] font-mono font-bold text-emerald-400 px-1 select-none tabular-nums"
+                title="Current Price Scale Zoom"
+              >
+                {Math.round(priceZoomLevel * 100)}%
+              </span>
+              <button
+                type="button"
+                onClick={() => setPriceZoomLevel((z) => Math.min(5.0, +(z + 0.2).toFixed(2)))}
+                className="p-1 px-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors"
+                title="Stretch price scale (Zoom In Price Axis)"
+              >
+                <ZoomIn className="w-3 h-3" />
+              </button>
+              {priceZoomLevel !== 1 && (
+                <button
+                  type="button"
+                  onClick={handleResetPriceZoom}
+                  className="px-1.5 py-0.5 text-[9px] font-mono font-bold text-cyan-300 bg-cyan-950/90 hover:bg-cyan-900 rounded border border-cyan-700/60 transition-colors ml-0.5"
+                  title="Auto-fit price scale (Reset to 100%)"
+                >
+                  Auto
+                </button>
+              )}
             </div>
+
+            {/* Reset All Zoom & Pan */}
+            <button
+              type="button"
+              onClick={handleResetZoomPan}
+              className={`p-1 px-1.5 text-[10px] rounded transition-colors flex items-center gap-1 ${
+                zoomLevel !== 1 || effectivePan !== 0 || priceZoomLevel !== 1
+                  ? 'text-cyan-400 hover:text-cyan-300 hover:bg-cyan-950/60 font-bold'
+                  : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'
+              }`}
+              title="Reset all zoom & pan to live edge (100% / Home / 0)"
+            >
+              <RotateCcw className="w-3 h-3" />
+              <span className="hidden md:inline text-[9px]">Reset</span>
+            </button>
 
             {/* Toggle Institutional Profile Lines */}
             <button
@@ -794,11 +998,54 @@ export const ChartInspector: React.FC<ChartInspectorProps> = ({
         <div className="absolute top-2 left-3 z-10 pointer-events-none flex items-center gap-2 text-[10px] font-mono text-slate-500 select-none">
           <span className="flex items-center gap-1 bg-slate-900/80 border border-slate-800/80 px-1.5 py-0.5 rounded backdrop-blur-sm">
             <Move className="w-2.5 h-2.5 text-cyan-400" />
-            <span>Drag / Arrows to Pan</span>
+            <span>Drag to Pan</span>
           </span>
           <span className="hidden sm:inline bg-slate-900/80 border border-slate-800/80 px-1.5 py-0.5 rounded backdrop-blur-sm">
-            Scroll to Zoom ({Math.round(zoomLevel * 100)}%)
+            Scroll: Zoom ({Math.round(zoomLevel * 100)}%)
           </span>
+          <span className="hidden md:inline bg-slate-900/80 border border-slate-800/80 px-1.5 py-0.5 rounded backdrop-blur-sm">
+            <ArrowUpDown className="w-2.5 h-2.5 text-emerald-400 inline mr-0.5" />
+            Drag Y-Axis: Zoom Price ({Math.round(priceZoomLevel * 100)}%)
+          </span>
+        </div>
+
+        {/* Floating Quick Price Axis Zoom widget on right (accessible for mobile touch & desktop) */}
+        <div
+          className="absolute top-3 right-3 z-20 flex flex-col items-center bg-slate-900/90 border border-slate-700/80 rounded-lg p-0.5 shadow-xl backdrop-blur-md"
+          title="Price Axis Scale controls (tap or drag axis)"
+        >
+          <button
+            type="button"
+            onClick={() => setPriceZoomLevel((z) => Math.min(5.0, +(z + 0.2).toFixed(2)))}
+            className="p-1 text-slate-400 hover:text-emerald-400 hover:bg-slate-800 rounded transition-colors"
+            title="Stretch / Zoom In Price Axis"
+          >
+            <ZoomIn className="w-3 h-3" />
+          </button>
+          <span
+            className="text-[9px] font-mono font-bold text-emerald-400 py-0.5 select-none tabular-nums"
+            title="Price scale zoom percentage"
+          >
+            {Math.round(priceZoomLevel * 100)}%
+          </span>
+          <button
+            type="button"
+            onClick={() => setPriceZoomLevel((z) => Math.max(0.3, +(z - 0.2).toFixed(2)))}
+            className="p-1 text-slate-400 hover:text-emerald-400 hover:bg-slate-800 rounded transition-colors"
+            title="Compress / Zoom Out Price Axis"
+          >
+            <ZoomOut className="w-3 h-3" />
+          </button>
+          {priceZoomLevel !== 1 && (
+            <button
+              type="button"
+              onClick={handleResetPriceZoom}
+              className="mt-0.5 px-1 py-0.5 text-[8px] font-mono font-bold text-cyan-300 bg-cyan-950 hover:bg-cyan-900 rounded border border-cyan-600 transition-colors"
+              title="Reset price scale to auto-fit"
+            >
+              AUTO
+            </button>
+          )}
         </div>
 
         {/* Floating Return to Live Edge button when user has panned into historical data */}
@@ -820,13 +1067,20 @@ export const ChartInspector: React.FC<ChartInspectorProps> = ({
           viewBox={`0 0 ${width} ${height}`}
           preserveAspectRatio="none"
           className={`w-full h-full select-none ${
-            isDragging ? 'cursor-grabbing' : 'cursor-crosshair'
+            isPriceDragging
+              ? 'cursor-ns-resize'
+              : isDragging
+              ? 'cursor-grabbing'
+              : cursorPos && cursorPos.x >= width - paddingRight - 8
+              ? 'cursor-ns-resize'
+              : 'cursor-crosshair'
           }`}
           onMouseDown={handleMouseDown}
           onMouseMove={handleMouseMove}
           onMouseUp={handleMouseUp}
           onMouseLeave={handleMouseLeave}
           onWheel={handleWheel}
+          onDoubleClick={handleDoubleClick}
           onTouchStart={handleTouchStart}
           onTouchMove={handleTouchMove}
           onTouchEnd={handleTouchEnd}
@@ -1258,6 +1512,18 @@ export const ChartInspector: React.FC<ChartInspectorProps> = ({
             </text>
           </g>
 
+          {/* Price Axis Drag / Zoom Top Indicator */}
+          <text
+            x={width - paddingRight + 48}
+            y={paddingTop - 10}
+            fill="#64748b"
+            fontSize="9"
+            textAnchor="middle"
+            fontFamily="JetBrains Mono, monospace"
+          >
+            ↕ Price (drag)
+          </text>
+
           {/* Crosshair Guidelines when hovering */}
           {cursorPos && (
             <g pointerEvents="none">
@@ -1279,7 +1545,7 @@ export const ChartInspector: React.FC<ChartInspectorProps> = ({
                 strokeDasharray="2 2"
                 strokeWidth="1"
               />
-              {/* Tooltip badge on crosshair Y */}
+              {/* Tooltip badge on crosshair Y (Price Axis) */}
               <rect
                 x={width - paddingRight + 4}
                 y={cursorPos.y - 8}
@@ -1366,6 +1632,101 @@ export const ChartInspector: React.FC<ChartInspectorProps> = ({
               {points[points.length - 1]?.time || 'LIVE'}
             </text>
           </g>
+
+          {/* TradingView-style AUTO button at bottom of price axis (clicks to reset price scale) */}
+          <g
+            className="cursor-pointer"
+            onClick={handleResetPriceZoom}
+          >
+            <rect
+              x={width - paddingRight + 12}
+              y={paddingTop + chartH + 5}
+              width={52}
+              height={18}
+              rx="3"
+              fill={priceZoomLevel !== 1 ? '#0e3a47' : '#1e293b'}
+              stroke={priceZoomLevel !== 1 ? '#06b6d4' : '#334155'}
+              strokeWidth="1"
+            />
+            <text
+              x={width - paddingRight + 38}
+              y={paddingTop + chartH + 17}
+              fill={priceZoomLevel !== 1 ? '#22d3ee' : '#94a3b8'}
+              fontSize="10"
+              fontWeight="bold"
+              fontFamily="JetBrains Mono, monospace"
+              textAnchor="middle"
+            >
+              AUTO
+            </text>
+          </g>
+
+          {/* Crosshair Extended Intersection Badge with Date & Time on Time Axis */}
+          {cursorPos && cursorPos.x >= paddingLeft && cursorPos.x <= width - paddingRight && (() => {
+            const ratio = Math.max(0, Math.min(1, (cursorPos.x - paddingLeft) / chartW));
+            const idx = Math.round(ratio * (points.length - 1));
+            const activePoint = points[idx] || hoveredPoint;
+            if (!activePoint) return null;
+
+            const d = new Date(activePoint.timestamp);
+            const day = d.getDate();
+            const month = d.toLocaleString('en-IN', { month: 'short' });
+            const year = d.getFullYear();
+            const timeStr = d.toLocaleTimeString('en-IN', {
+              hour: '2-digit',
+              minute: '2-digit',
+              second: selectedTimeframe === '1m' ? '2-digit' : undefined,
+              hour12: false,
+            });
+            const formattedDateTime = `${day} ${month} ${year}  ${timeStr}`;
+
+            const badgeW = selectedTimeframe === '1m' ? 148 : 136;
+            const badgeH = 20;
+            const badgeX = Math.max(paddingLeft, Math.min(width - paddingRight - badgeW, cursorPos.x - badgeW / 2));
+            const badgeY = paddingTop + chartH + 2;
+
+            return (
+              <g pointerEvents="none">
+                {/* Pinpoint intersection dot on the time axis */}
+                <circle
+                  cx={cursorPos.x}
+                  cy={paddingTop + chartH}
+                  r="3"
+                  fill="#38bdf8"
+                  stroke="#0284c7"
+                  strokeWidth="1"
+                />
+                {/* Connecting arrow caret */}
+                <polygon
+                  points={`${cursorPos.x - 4},${badgeY + 1} ${cursorPos.x + 4},${badgeY + 1} ${cursorPos.x},${paddingTop + chartH}`}
+                  fill="#0f172a"
+                />
+                {/* Solid high-contrast background pill */}
+                <rect
+                  x={badgeX}
+                  y={badgeY}
+                  width={badgeW}
+                  height={badgeH}
+                  fill="#0f172a"
+                  stroke="#38bdf8"
+                  strokeWidth="1.2"
+                  rx="4"
+                />
+                {/* Crisp Date and Time text */}
+                <text
+                  x={badgeX + badgeW / 2}
+                  y={badgeY + 14}
+                  fill="#f8fafc"
+                  fontSize="10"
+                  fontFamily="JetBrains Mono, monospace"
+                  fontWeight="bold"
+                  textAnchor="middle"
+                >
+                  {formattedDateTime}
+                </text>
+              </g>
+            );
+          })()}
         </svg>
       </div>
 
@@ -1382,6 +1743,15 @@ export const ChartInspector: React.FC<ChartInspectorProps> = ({
               title="Viewing past candles. Click to jump to live."
             >
               Past View (-{effectivePan} bars) ⚡
+            </span>
+          )}
+          {priceZoomLevel !== 1 && (
+            <span
+              onClick={handleResetPriceZoom}
+              className="text-emerald-400 font-bold bg-emerald-950/70 px-1.5 py-0.5 rounded border border-emerald-700/60 shrink-0 cursor-pointer hover:bg-emerald-900/60 transition-colors"
+              title="Custom price scale zoom active. Click to auto-fit."
+            >
+              Price: {Math.round(priceZoomLevel * 100)}% ⟲
             </span>
           )}
           <span className="shrink-0">O: ₹{(hoveredPoint?.open || points[points.length - 1]?.open || 0).toFixed(2)}</span>
