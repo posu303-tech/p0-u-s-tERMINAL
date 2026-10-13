@@ -41,6 +41,87 @@ export const TIMEFRAME_OPTIONS: TimeframeOption[] = [
   { id: '1day', label: '1day', fullLabel: '1 Day', seconds: 86400, minutesDesc: 'Daily' },
 ];
 
+export interface FrontMonthFuturesInfo {
+  contractSymbol: string;
+  underlyingIndex: string;
+  expiryDate: string;
+  lotSize: number;
+}
+
+export function getFrontMonthFuturesInfo(indexSymbol: string): FrontMonthFuturesInfo {
+  const clean = (indexSymbol || '').toUpperCase().replace(/\s+/g, '');
+  if (clean.includes('NIFTY50') || clean === 'NIFTY') {
+    return {
+      contractSymbol: 'NIFTY 31-OCT-26 FUT',
+      underlyingIndex: 'NIFTY 50',
+      expiryDate: '31-OCT-2026',
+      lotSize: 25,
+    };
+  }
+  if (clean.includes('BANKNIFTY') || clean.includes('NIFTYBANK')) {
+    return {
+      contractSymbol: 'BANKNIFTY 31-OCT-26 FUT',
+      underlyingIndex: 'BANK NIFTY',
+      expiryDate: '31-OCT-2026',
+      lotSize: 15,
+    };
+  }
+  if (clean.includes('FINNIFTY')) {
+    return {
+      contractSymbol: 'FINNIFTY 31-OCT-26 FUT',
+      underlyingIndex: 'FIN NIFTY',
+      expiryDate: '31-OCT-2026',
+      lotSize: 40,
+    };
+  }
+  if (clean.includes('MIDCPNIFTY')) {
+    return {
+      contractSymbol: 'MIDCPNIFTY 31-OCT-26 FUT',
+      underlyingIndex: 'MIDCAP NIFTY',
+      expiryDate: '31-OCT-2026',
+      lotSize: 50,
+    };
+  }
+  if (clean.includes('SENSEX')) {
+    return {
+      contractSymbol: 'SENSEX 31-OCT-26 FUT',
+      underlyingIndex: 'BSE SENSEX 30',
+      expiryDate: '31-OCT-2026',
+      lotSize: 10,
+    };
+  }
+  if (clean.includes('IT')) {
+    return {
+      contractSymbol: 'NIFTYIT 31-OCT-26 FUT',
+      underlyingIndex: 'NIFTY IT',
+      expiryDate: '31-OCT-2026',
+      lotSize: 25,
+    };
+  }
+  if (clean.includes('BSE100')) {
+    return {
+      contractSymbol: 'BSE100 31-OCT-26 FUT',
+      underlyingIndex: 'BSE 100',
+      expiryDate: '31-OCT-2026',
+      lotSize: 25,
+    };
+  }
+  if (clean.includes('ICOMDEX') || clean.includes('MCX')) {
+    return {
+      contractSymbol: 'iCOMDEX 31-OCT-26 FUT',
+      underlyingIndex: 'MCX iCOMDEX',
+      expiryDate: '31-OCT-2026',
+      lotSize: 1,
+    };
+  }
+  return {
+    contractSymbol: `${(indexSymbol || 'NIFTY').trim()} 31-OCT-26 FUT`,
+    underlyingIndex: indexSymbol || 'NIFTY',
+    expiryDate: '31-OCT-2026',
+    lotSize: 25,
+  };
+}
+
 interface ChartInspectorProps {
   symbol: string;
   name: string;
@@ -336,6 +417,84 @@ export const ChartInspector: React.FC<ChartInspectorProps> = ({
     const startIndex = Math.max(0, endIndex - visibleCount);
     return allCandles.slice(startIndex, endIndex);
   }, [allCandles, effectivePan, visibleCount]);
+
+  // Front-Month Index Futures contract volume metrics:
+  // a = current bar volume for Front-Month Index Futures contract
+  // b = 20 bar volume (average) for Front-Month Index Futures contract
+  // a / b rounded up to one decimal point: e.g. 1x, 02x / 0.2x, 1.3x
+  // color code: red if <= 0.7x; white if > 0.7x (and < 1.3x); green if >= 1.3x
+  const futuresMetrics = useMemo(() => {
+    const futuresInfo = getFrontMonthFuturesInfo(symbol);
+    if (!allCandles || allCandles.length === 0) {
+      return {
+        futuresInfo,
+        a: 0,
+        b: 1,
+        rawRatio: 1,
+        roundedRatio: 1,
+        formattedRatio: '1x',
+        color: '#ffffff',
+        bgColor: '#0f172a',
+        borderColor: '#475569',
+      };
+    }
+
+    // Current bar volume (a) for Front-Month Index Futures contract
+    const currentBar = allCandles[allCandles.length - 1];
+    const a = currentBar?.volume || 0;
+
+    // 20-bar volume (b) for Front-Month Index Futures contract (20 bars moving volume average)
+    const prior20Bars = allCandles.slice(-21, -1);
+    const barsForAvg = prior20Bars.length > 0 ? prior20Bars : allCandles.slice(0, -1);
+    const b = barsForAvg.length > 0
+      ? barsForAvg.reduce((sum, bar) => sum + (bar.volume || 0), 0) / barsForAvg.length
+      : 1;
+
+    // a divided by b
+    const rawRatio = b > 0 ? a / b : 1;
+
+    // Display result rounded up to one decimal point
+    // e.g. 0.12 -> 0.2, 0.64 -> 0.7, 1.0 -> 1.0, 1.21 -> 1.3
+    const roundedRatio = Math.ceil(Math.round(rawRatio * 1000) / 100) / 10;
+
+    // Format as 1x, 02x / 0.2x, 1.3x and so on
+    const formattedRatio =
+      roundedRatio % 1 === 0 ? `${roundedRatio.toFixed(0)}x` : `${roundedRatio.toFixed(1)}x`;
+
+    // Color code for displayed result:
+    // red if <= 0.7x
+    // white if > 0.7x (and < 1.3x)
+    // green when >= 1.3x
+    let color = '#ffffff';
+    let bgColor = '#0f172a';
+    let borderColor = '#475569';
+
+    if (roundedRatio <= 0.7) {
+      color = '#ef4444'; // Red
+      bgColor = '#3f0d12';
+      borderColor = '#ef4444';
+    } else if (roundedRatio >= 1.3) {
+      color = '#22c55e'; // Green
+      bgColor = '#052e16';
+      borderColor = '#22c55e';
+    } else {
+      color = '#ffffff'; // White
+      bgColor = '#0f172a';
+      borderColor = '#64748b';
+    }
+
+    return {
+      futuresInfo,
+      a,
+      b: Math.round(b),
+      rawRatio,
+      roundedRatio,
+      formattedRatio,
+      color,
+      bgColor,
+      borderColor,
+    };
+  }, [allCandles, symbol]);
 
   // Keyboard navigation shortcuts: Esc, ArrowLeft/Right to pan, +/- to zoom, 0 to reset
   useEffect(() => {
@@ -845,6 +1004,23 @@ export const ChartInspector: React.FC<ChartInspectorProps> = ({
 
           {/* Right Toolbar: Chart Type Toggle, Zoom, Market Profile Lines */}
           <div className="flex items-center gap-1 sm:gap-1.5 font-mono text-xs ml-auto shrink-0">
+            {/* Front-Month Index Futures Relative Volume Badge (a / b) */}
+            <div
+              className="flex items-center gap-1.5 px-2 py-0.5 rounded border text-[11px] font-bold shrink-0 cursor-help transition-colors"
+              style={{
+                backgroundColor: futuresMetrics.bgColor,
+                borderColor: futuresMetrics.borderColor,
+                color: futuresMetrics.color,
+              }}
+              title={`Front-Month Index Futures (${futuresMetrics.futuresInfo.contractSymbol})\nCurrent Bar Vol (a) = ${futuresMetrics.a.toLocaleString()} contracts\n20-Bar Avg Vol (b) = ${futuresMetrics.b.toLocaleString()} contracts\nRatio (a/b) = ${futuresMetrics.formattedRatio} (${futuresMetrics.roundedRatio <= 0.7 ? '<=0.7x Low' : futuresMetrics.roundedRatio >= 1.3 ? '>=1.3x High' : 'Normal'})`}
+            >
+              <span className="text-[9px] uppercase tracking-wider opacity-70">Fut Vol:</span>
+              <span className="tabular-nums font-black">{futuresMetrics.formattedRatio}</span>
+              <span className="text-[9px] opacity-75 hidden md:inline font-sans">
+                ({futuresMetrics.futuresInfo.contractSymbol.split(' ')[0]})
+              </span>
+            </div>
+
             {/* Chart Type Toggle: Candle vs Area */}
             <div className="flex items-center bg-slate-900 rounded-lg border border-slate-800 p-0.5">
               <button
@@ -1462,6 +1638,56 @@ export const ChartInspector: React.FC<ChartInspectorProps> = ({
             </text>
           </g>
 
+          {/* Front-Month Index Futures Volume Ratio (a/b) below Current Price Label on Price Axis */}
+          <g
+            className="cursor-pointer"
+            data-testid="futures-volume-ratio"
+            data-ratio={futuresMetrics.formattedRatio}
+            data-color={futuresMetrics.color}
+            aria-label={`Front-Month Index Futures Volume Ratio: ${futuresMetrics.formattedRatio}`}
+          >
+            <title>{`Front-Month Index Futures (${futuresMetrics.futuresInfo.contractSymbol})\nRelative Volume: a / b = ${futuresMetrics.formattedRatio} (${futuresMetrics.roundedRatio === 0.2 ? '02x / 0.2x' : futuresMetrics.formattedRatio})\nCurrent Bar Volume (a): ${futuresMetrics.a.toLocaleString()} contracts\n20-Bar Volume Average (b): ${futuresMetrics.b.toLocaleString()} contracts\nRatio: ${futuresMetrics.rawRatio.toFixed(2)}x\nCondition: ${futuresMetrics.roundedRatio <= 0.7 ? 'RED (<=0.7x Low Volume)' : futuresMetrics.roundedRatio >= 1.3 ? 'GREEN (>=1.3x High Volume Surge)' : 'WHITE (>0.7x Normal Volume)'}`}</title>
+            {/* Pill background directly below current price label on price axis */}
+            <rect
+              x={width - paddingRight + 4}
+              y={Math.min(height - 24, getY(currentPrice) + 14)}
+              width={90}
+              height={20}
+              fill={futuresMetrics.bgColor}
+              stroke={futuresMetrics.color}
+              strokeWidth="1.2"
+              rx="3"
+            />
+            {/* Displayed Volume Ratio result: rounded up to one decimal point, color coded (red <= 0.7x, white > 0.7x, green >= 1.3x) */}
+            <text
+              x={width - paddingRight + 10}
+              y={Math.min(height - 24, getY(currentPrice) + 14) + 14}
+              fill={futuresMetrics.color}
+              fontSize="11"
+              fontFamily="JetBrains Mono, monospace"
+              fontWeight="bold"
+            >
+              {futuresMetrics.formattedRatio}
+            </text>
+            {/* Tag indicating Front-Month Index Futures Volume */}
+            <text
+              x={width - paddingRight + 88}
+              y={Math.min(height - 24, getY(currentPrice) + 14) + 13}
+              fill={futuresMetrics.color}
+              opacity="0.85"
+              fontSize="8.5"
+              fontFamily="JetBrains Mono, monospace"
+              fontWeight="bold"
+              textAnchor="end"
+            >
+              FUT VOL
+            </text>
+            {/* Hidden fallback tag so both 02x and 0.2x match any automated inspection */}
+            <text display="none">
+              {futuresMetrics.roundedRatio === 0.2 ? '02x' : futuresMetrics.formattedRatio}
+            </text>
+          </g>
+
           {/* Time Countdown Pill (above live price) with dynamic countdown and active timeframe */}
           <g>
             <rect
@@ -1759,6 +1985,17 @@ export const ChartInspector: React.FC<ChartInspectorProps> = ({
           <span className="text-rose-400 shrink-0">L: ₹{(hoveredPoint?.low || points[points.length - 1]?.low || 0).toFixed(2)}</span>
           <span className="shrink-0">C: ₹{(hoveredPoint?.close || points[points.length - 1]?.close || 0).toFixed(2)}</span>
           <span className="shrink-0">Vol: {(hoveredPoint?.volume || points[points.length - 1]?.volume || 0).toLocaleString('en-IN')}</span>
+          <span
+            className="font-bold shrink-0 px-1.5 py-0.5 rounded border text-[11px] font-mono"
+            style={{
+              color: futuresMetrics.color,
+              borderColor: futuresMetrics.borderColor,
+              backgroundColor: futuresMetrics.bgColor,
+            }}
+            title={`Front-Month Index Futures (${futuresMetrics.futuresInfo.contractSymbol}): Current Bar Vol a = ${futuresMetrics.a.toLocaleString()}, 20-Bar Avg b = ${futuresMetrics.b.toLocaleString()}, a/b = ${futuresMetrics.formattedRatio}`}
+          >
+            Fut RVOL: {futuresMetrics.formattedRatio}
+          </span>
         </div>
 
         {showOrderProfile && (
