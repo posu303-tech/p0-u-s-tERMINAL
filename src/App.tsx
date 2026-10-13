@@ -27,6 +27,7 @@ import {
 } from './services/marketEngine';
 import { CryptoVault, DecryptedVaultPayload } from './services/cryptoVault';
 import { TRANSLATIONS } from './i18n/translations';
+import { getAssetMarketStatus } from './services/marketHours';
 import { Navbar } from './components/Navbar';
 import { OverviewView } from './components/OverviewView';
 import { EquitiesView } from './components/EquitiesView';
@@ -71,6 +72,7 @@ export default function App() {
   // Streaming Engine Controls
   const [isStreaming, setIsStreaming] = useState<boolean>(true);
   const [tickSpeed, setTickSpeed] = useState<number>(1000); // 1s tick
+  const [simulateOffMarket, setSimulateOffMarket] = useState<boolean>(false);
 
   // Encrypted Vault State
   const [isVaultUnlocked, setIsVaultUnlocked] = useState<boolean>(false);
@@ -113,8 +115,9 @@ export default function App() {
   const [isAlertsModalOpen, setIsAlertsModalOpen] = useState<boolean>(false);
   const [isReportModalOpen, setIsReportModalOpen] = useState<boolean>(false);
 
-  // Active Symbol in Chart Inspector
+  // Active Symbol and Timeframe in Chart Inspector
   const [inspectSymbol, setInspectSymbol] = useState<string | null>('NIFTY 50');
+  const [chartTimeframe, setChartTimeframe] = useState<string>('5m');
 
   // Floating Toast Notifications for Real-Time Alert Fires
   const [toastAlerts, setToastAlerts] = useState<AlertTriggerLog[]>([]);
@@ -148,87 +151,104 @@ export default function App() {
     if (!isStreaming) return;
 
     const interval = setInterval(() => {
-      // 1. Update Benchmark Indices
-      setIndices((prev) =>
-        prev.map((idx) => {
-          const deltaPct = (Math.random() - 0.49) * 0.0015; // Realistic tick
-          const newLtp = Math.round(idx.ltp * (1 + deltaPct) * 100) / 100;
-          const newChange = Math.round((newLtp - idx.prevClose) * 100) / 100;
-          const newChangePct = Math.round((newChange / idx.prevClose) * 10000) / 100;
-          const newHigh = Math.max(idx.high, newLtp);
-          const newLow = Math.min(idx.low, newLtp);
-          const newSparkline = [...idx.sparkline.slice(-15), newLtp];
+      // Determine exchange active session state
+      const nseStatus = getAssetMarketStatus('NSE');
+      const mcxStatus = getAssetMarketStatus('MCX');
 
-          return {
-            ...idx,
-            ltp: newLtp,
-            change: newChange,
-            changePercent: newChangePct,
-            high: newHigh,
-            low: newLow,
-            sparkline: newSparkline,
-            volume: idx.volume + Math.round(Math.random() * 25000),
-          };
-        })
-      );
+      // Only tick assets whose exchange is currently open, unless off-market simulation is explicitly enabled
+      const shouldTickNSE = simulateOffMarket || nseStatus.isOpen;
+      const shouldTickMCX = simulateOffMarket || mcxStatus.isOpen;
 
-      // 2. Update Equities
-      setEquities((prev) =>
-        prev.map((eq) => {
-          const deltaPct = (Math.random() - 0.488) * 0.002;
-          const newLtp = Math.round(eq.ltp * (1 + deltaPct) * 100) / 100;
-          const newChange = Math.round((newLtp - eq.prevClose) * 100) / 100;
-          const newChangePct = Math.round((newChange / eq.prevClose) * 10000) / 100;
-          const newHigh = Math.max(eq.high, newLtp);
-          const newLow = Math.min(eq.low, newLtp);
+      // If markets are closed and simulation is off, prices remain frozen at official exchange close
+      if (!shouldTickNSE && !shouldTickMCX) {
+        return;
+      }
 
-          // Update latest historical point
-          const updatedHist = [...eq.historical30d];
-          if (updatedHist.length > 0) {
-            const last = { ...updatedHist[updatedHist.length - 1] };
-            last.close = newLtp;
-            last.high = Math.max(last.high, newLtp);
-            last.low = Math.min(last.low, newLtp);
-            updatedHist[updatedHist.length - 1] = last;
-          }
+      // 1. Update Benchmark Indices (NSE/BSE) only during active session or when simulated
+      if (shouldTickNSE) {
+        setIndices((prev) =>
+          prev.map((idx) => {
+            const deltaPct = (Math.random() - 0.49) * 0.0015; // Realistic tick
+            const newLtp = Math.round(idx.ltp * (1 + deltaPct) * 100) / 100;
+            const newChange = Math.round((newLtp - idx.prevClose) * 100) / 100;
+            const newChangePct = Math.round((newChange / idx.prevClose) * 10000) / 100;
+            const newHigh = Math.max(idx.high, newLtp);
+            const newLow = Math.min(idx.low, newLtp);
+            const newSparkline = [...idx.sparkline.slice(-15), newLtp];
 
-          return {
-            ...eq,
-            ltp: newLtp,
-            change: newChange,
-            changePercent: newChangePct,
-            high: newHigh,
-            low: newLow,
-            volume: eq.volume + Math.round(Math.random() * 800),
-            historical30d: updatedHist,
-          };
-        })
-      );
+            return {
+              ...idx,
+              ltp: newLtp,
+              change: newChange,
+              changePercent: newChangePct,
+              high: newHigh,
+              low: newLow,
+              sparkline: newSparkline,
+              volume: idx.volume + Math.round(Math.random() * 25000),
+            };
+          })
+        );
+
+        // 2. Update Equities
+        setEquities((prev) =>
+          prev.map((eq) => {
+            const deltaPct = (Math.random() - 0.488) * 0.002;
+            const newLtp = Math.round(eq.ltp * (1 + deltaPct) * 100) / 100;
+            const newChange = Math.round((newLtp - eq.prevClose) * 100) / 100;
+            const newChangePct = Math.round((newChange / eq.prevClose) * 10000) / 100;
+            const newHigh = Math.max(eq.high, newLtp);
+            const newLow = Math.min(eq.low, newLtp);
+
+            // Update latest historical point
+            const updatedHist = [...eq.historical30d];
+            if (updatedHist.length > 0) {
+              const last = { ...updatedHist[updatedHist.length - 1] };
+              last.close = newLtp;
+              last.high = Math.max(last.high, newLtp);
+              last.low = Math.min(last.low, newLtp);
+              updatedHist[updatedHist.length - 1] = last;
+            }
+
+            return {
+              ...eq,
+              ltp: newLtp,
+              change: newChange,
+              changePercent: newChangePct,
+              high: newHigh,
+              low: newLow,
+              volume: eq.volume + Math.round(Math.random() * 800),
+              historical30d: updatedHist,
+            };
+          })
+        );
+
+        // 4. Update Option Chains
+        setOptionChain((prev) => generateOptionChain(prev.underlyingLTP, 'NIFTY'));
+        setBankNiftyChain((prev) => generateOptionChain(prev.underlyingLTP, 'BANKNIFTY'));
+      }
 
       // 3. Update MCX Commodities
-      setCommodities((prev) =>
-        prev.map((c) => {
-          const deltaPct = (Math.random() - 0.49) * 0.0018;
-          const newLtp = Math.round(c.ltp * (1 + deltaPct) * 10) / 10;
-          const newChange = Math.round((newLtp - c.prevClose) * 10) / 10;
-          const newChangePct = Math.round((newChange / c.prevClose) * 10000) / 100;
-          return {
-            ...c,
-            ltp: newLtp,
-            change: newChange,
-            changePercent: newChangePct,
-            high: Math.max(c.high, newLtp),
-            low: Math.min(c.low, newLtp),
-            volume: c.volume + Math.round(Math.random() * 20),
-          };
-        })
-      );
+      if (shouldTickMCX) {
+        setCommodities((prev) =>
+          prev.map((c) => {
+            const deltaPct = (Math.random() - 0.49) * 0.0018;
+            const newLtp = Math.round(c.ltp * (1 + deltaPct) * 10) / 10;
+            const newChange = Math.round((newLtp - c.prevClose) * 10) / 10;
+            const newChangePct = Math.round((newChange / c.prevClose) * 10000) / 100;
+            return {
+              ...c,
+              ltp: newLtp,
+              change: newChange,
+              changePercent: newChangePct,
+              high: Math.max(c.high, newLtp),
+              low: Math.min(c.low, newLtp),
+              volume: c.volume + Math.round(Math.random() * 20),
+            };
+          })
+        );
+      }
 
-      // 4. Update Option Chains
-      setOptionChain((prev) => generateOptionChain(prev.underlyingLTP, 'NIFTY'));
-      setBankNiftyChain((prev) => generateOptionChain(prev.underlyingLTP, 'BANKNIFTY'));
-
-      // 5. Evaluate Alert Rules & Technical Patterns
+      // 5. Evaluate Alert Rules & Technical Patterns only if prices changed
       const evaluation = evaluateAlertRules(
         vaultData.alerts,
         equities,
@@ -255,7 +275,7 @@ export default function App() {
     }, tickSpeed);
 
     return () => clearInterval(interval);
-  }, [isStreaming, tickSpeed, vaultData.alerts, equities, indices, commodities]);
+  }, [isStreaming, tickSpeed, simulateOffMarket, vaultData.alerts, equities, indices, commodities]);
 
   // Handle Vault Unlock / Setup success
   const handleUnlockSuccess = (payload: DecryptedVaultPayload) => {
@@ -423,8 +443,53 @@ export default function App() {
           })}
         </div>
 
-        {/* Streaming Rate & Pause Toggle */}
+        {/* Streaming Rate, Market Closed Freeze Notice & Simulation Toggle */}
         <div className="flex items-center gap-2 shrink-0">
+          {!getAssetMarketStatus('NSE').isOpen && (
+            <div className="flex items-center gap-1.5">
+              <span
+                className={`px-2 py-0.5 rounded text-[10px] sm:text-[11px] font-mono border flex items-center gap-1.5 ${
+                  simulateOffMarket
+                    ? 'bg-amber-950/70 border-amber-800 text-amber-300'
+                    : 'bg-slate-900 border-slate-700 text-slate-400'
+                }`}
+                title={
+                  simulateOffMarket
+                    ? 'Simulated off-hours price movements active for testing'
+                    : 'NSE/BSE is closed (09:15-15:30 IST). Prices are strictly frozen at official exchange close.'
+                }
+              >
+                <span
+                  className={`w-1.5 h-1.5 rounded-full ${
+                    simulateOffMarket ? 'bg-amber-400 animate-ping' : 'bg-rose-500'
+                  }`}
+                />
+                <span className="hidden sm:inline">
+                  {simulateOffMarket ? 'Off-Hours Sim Active' : 'Market Closed · Prices Frozen'}
+                </span>
+                <span className="sm:hidden">
+                  {simulateOffMarket ? 'Sim Active' : 'Closed · Frozen'}
+                </span>
+              </span>
+
+              <button
+                onClick={() => setSimulateOffMarket(!simulateOffMarket)}
+                className={`px-2 py-0.5 rounded text-[10px] sm:text-[11px] font-mono border transition-colors ${
+                  simulateOffMarket
+                    ? 'bg-amber-500/20 border-amber-600 text-amber-200 hover:bg-amber-500/30'
+                    : 'bg-cyan-950/60 border-cyan-800/80 text-cyan-300 hover:bg-cyan-900/60'
+                }`}
+                title={
+                  simulateOffMarket
+                    ? 'Restore realistic market freeze at official close'
+                    : 'Simulate synthetic price fluctuations while market is closed'
+                }
+              >
+                {simulateOffMarket ? 'Freeze at Close' : 'Simulate Off-Hours'}
+              </button>
+            </div>
+          )}
+
           <button
             onClick={() => setIsStreaming(!isStreaming)}
             className={`px-2 py-0.5 rounded text-[11px] font-semibold flex items-center gap-1 transition-colors ${
@@ -490,6 +555,8 @@ export default function App() {
               changePercent={inspectedAsset.changePercent}
               historicalData={inspectedAsset.history}
               technicals={inspectedAsset.technicals}
+              timeframe={chartTimeframe}
+              onTimeframeChange={setChartTimeframe}
               onClose={() => setInspectSymbol(null)}
               isDark={isDark}
             />
