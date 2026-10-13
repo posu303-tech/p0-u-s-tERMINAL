@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { PricePoint, TechnicalIndicators } from '../types/market';
 import {
   Maximize2,
@@ -14,6 +14,9 @@ import {
   Radio,
   ChevronDown,
   Check,
+  ChevronLeft,
+  ChevronRight,
+  Move,
 } from 'lucide-react';
 import { MarketStatusBadge } from './MarketStatusBadge';
 
@@ -66,6 +69,8 @@ export const ChartInspector: React.FC<ChartInspectorProps> = ({
 }) => {
   const [isMaximized, setIsMaximized] = useState(false);
   const [zoomLevel, setZoomLevel] = useState(1);
+  const [panOffsetBars, setPanOffsetBars] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
   const [chartType, setChartType] = useState<'candle' | 'area'>('candle');
   const [showOrderProfile, setShowOrderProfile] = useState(true);
   const [showSMA20, setShowSMA20] = useState(false);
@@ -81,6 +86,18 @@ export const ChartInspector: React.FC<ChartInspectorProps> = ({
   const [secondsRemaining, setSecondsRemaining] = useState<number>(30);
 
   const containerRef = useRef<HTMLDivElement>(null);
+  const svgRef = useRef<SVGSVGElement>(null);
+
+  // Dragging and touch references for pan & pinch-zoom
+  const isDraggingRef = useRef(false);
+  const dragStartXRef = useRef(0);
+  const dragStartPanRef = useRef(0);
+  const touchStartRef = useRef<{ x: number; y: number; dist?: number; pan: number }>({ x: 0, y: 0, pan: 0 });
+
+  // Reset pan offset when symbol or timeframe changes
+  useEffect(() => {
+    setPanOffsetBars(0);
+  }, [symbol, selectedTimeframe]);
 
   // Synchronize timeframe prop if controlled externally
   useEffect(() => {
@@ -102,6 +119,18 @@ export const ChartInspector: React.FC<ChartInspectorProps> = ({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [isTimeframeOpen]);
 
+  // Global mouseup listener to guarantee drag ends smoothly
+  useEffect(() => {
+    const handleGlobalMouseUp = () => {
+      if (isDraggingRef.current) {
+        isDraggingRef.current = false;
+        setIsDragging(false);
+      }
+    };
+    window.addEventListener('mouseup', handleGlobalMouseUp);
+    return () => window.removeEventListener('mouseup', handleGlobalMouseUp);
+  }, []);
+
   // Dynamic countdown timer for current timeframe bar
   useEffect(() => {
     const updateCountdown = () => {
@@ -118,44 +147,63 @@ export const ChartInspector: React.FC<ChartInspectorProps> = ({
   const handleTimeframeSelect = (tfId: string) => {
     setSelectedTimeframe(tfId);
     setIsTimeframeOpen(false);
+    setPanOffsetBars(0);
     onTimeframeChange?.(tfId);
   };
 
-  // Keyboard shortcut: Esc to restore / exit maximize or close dropdown
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') {
-        if (isTimeframeOpen) {
-          setIsTimeframeOpen(false);
-        } else if (isMaximized) {
-          setIsMaximized(false);
-        }
-      }
-    };
-    window.addEventListener('keydown', handleKeyDown);
-    return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [isMaximized, isTimeframeOpen]);
+  const handleResetZoomPan = useCallback(() => {
+    setZoomLevel(1);
+    setPanOffsetBars(0);
+  }, []);
 
-  // Adjust visible points based on zoom
-  const pointsSliceCount = Math.max(15, Math.min(60, Math.round(35 / zoomLevel)));
+  // Visible points count based on current zoomLevel
+  // 1.0x = ~35 bars; 0.5x = ~70 bars (broad context); 2.5x = ~14 bars (high-detail focus)
+  const visibleCount = Math.max(12, Math.min(100, Math.round(35 / zoomLevel)));
 
-  // Generate authentic candlestick points adapted to selected timeframe
-  const points = useMemo(() => {
-    // If 1day and baseline historical daily points exist, use them
-    if (selectedTimeframe === '1day' && historicalData && historicalData.length >= 10) {
+  // Generate authentic candlestick dataset with deep history (160 bars) to allow extensive panning
+  const allCandles = useMemo(() => {
+    // If 1day and baseline historical daily points exist, use/pad them
+    if (selectedTimeframe === '1day' && historicalData && historicalData.length >= 5) {
       const cloned = historicalData.map((p) => ({ ...p }));
+      // Pad backward if shorter than 120 bars so daily chart supports smooth panning
+      if (cloned.length < 120) {
+        const first = cloned[0];
+        const dayMs = 86400 * 1000;
+        const missing = 120 - cloned.length;
+        let walk = first.open;
+        const prepended: PricePoint[] = [];
+        for (let j = missing; j >= 1; j--) {
+          const ts = first.timestamp - j * dayMs;
+          const d = new Date(ts);
+          const r = Math.sin(j * 4.31) * 1000;
+          const delta = (r - Math.floor(r) - 0.49) * 0.015 * walk;
+          walk = walk - delta;
+          const open = Math.round(walk * 100) / 100;
+          const close = Math.round((walk + (Math.sin(j * 2.1) - 0.5) * 0.01 * walk) * 100) / 100;
+          prepended.push({
+            time: `${d.getDate()} ${d.toLocaleString('en-IN', { month: 'short' })}`,
+            timestamp: ts,
+            open,
+            high: Math.round(Math.max(open, close) * 1.012 * 100) / 100,
+            low: Math.round(Math.min(open, close) * 0.988 * 100) / 100,
+            close,
+            volume: 800000 + Math.round((Math.sin(j) + 1) * 200000),
+          });
+        }
+        cloned.unshift(...prepended);
+      }
       const last = cloned[cloned.length - 1];
       if (last) {
         last.close = currentPrice;
         last.high = Math.max(last.high, currentPrice);
         last.low = Math.min(last.low, currentPrice);
       }
-      return cloned.slice(-pointsSliceCount);
+      return cloned;
     }
 
     // Granular intraday candles for 1m, 3m, 5m, 15, 30m, 1hr, 2hr, 4hr, 1day
     const tfConfig = TIMEFRAME_OPTIONS.find((t) => t.id === selectedTimeframe) || TIMEFRAME_OPTIONS[2];
-    const totalBars = 60;
+    const totalBars = 160; // 160 bars enables deep panning through multiple sessions
     const tfSec = tfConfig.seconds;
     const now = Date.now();
 
@@ -244,8 +292,52 @@ export const ChartInspector: React.FC<ChartInspectorProps> = ({
       lastBar.low = Math.min(lastBar.low, currentPrice);
     }
 
-    return generated.slice(-pointsSliceCount);
-  }, [selectedTimeframe, symbol, currentPrice, historicalData, pointsSliceCount]);
+    return generated;
+  }, [selectedTimeframe, symbol, currentPrice, historicalData]);
+
+  // Compute pan boundaries and active visible candle slice
+  const maxPan = Math.max(0, allCandles.length - visibleCount);
+  const effectivePan = Math.min(panOffsetBars, maxPan);
+
+  const points = useMemo(() => {
+    if (allCandles.length === 0) return [];
+    const endIndex = allCandles.length - effectivePan;
+    const startIndex = Math.max(0, endIndex - visibleCount);
+    return allCandles.slice(startIndex, endIndex);
+  }, [allCandles, effectivePan, visibleCount]);
+
+  // Keyboard navigation shortcuts: Esc, ArrowLeft/Right to pan, +/- to zoom, 0 to reset
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Don't intercept if user is typing in form inputs
+      if (['INPUT', 'TEXTAREA'].includes((e.target as HTMLElement)?.tagName)) return;
+
+      if (e.key === 'Escape') {
+        if (isTimeframeOpen) {
+          setIsTimeframeOpen(false);
+        } else if (isMaximized) {
+          setIsMaximized(false);
+        }
+      } else if (e.key === 'ArrowLeft') {
+        // Pan back into historical data
+        setPanOffsetBars((p) => Math.min(maxPan, p + 3));
+      } else if (e.key === 'ArrowRight') {
+        // Pan forward toward live edge
+        setPanOffsetBars((p) => Math.max(0, p - 3));
+      } else if (e.key === '+' || e.key === '=') {
+        // Zoom in
+        setZoomLevel((z) => Math.min(3.0, +(z + 0.2).toFixed(2)));
+      } else if (e.key === '-' || e.key === '_') {
+        // Zoom out
+        setZoomLevel((z) => Math.max(0.5, +(z - 0.2).toFixed(2)));
+      } else if (e.key === '0' || e.key === 'Home') {
+        // Reset zoom & pan to live
+        handleResetZoomPan();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [isMaximized, isTimeframeOpen, maxPan, handleResetZoomPan]);
 
   if (points.length === 0) return null;
 
@@ -294,6 +386,124 @@ export const ChartInspector: React.FC<ChartInspectorProps> = ({
     return `${acc} ${i === 0 ? 'M' : 'L'} ${x} ${y}`;
   }, '');
   const areaClosed = `${areaPath} L ${getX(points.length - 1)} ${paddingTop + chartH} L ${getX(0)} ${paddingTop + chartH} Z`;
+
+  // Mouse drag for panning horizontal timeline & hover coordinate tracking
+  const handleMouseDown = (e: React.MouseEvent<SVGSVGElement>) => {
+    if (e.button !== 0) return; // Only primary mouse button
+    isDraggingRef.current = true;
+    dragStartXRef.current = e.clientX;
+    dragStartPanRef.current = panOffsetBars;
+    setIsDragging(true);
+  };
+
+  const handleMouseMove = (e: React.MouseEvent<SVGSVGElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    const svgX = ((e.clientX - rect.left) / rect.width) * width;
+    const svgY = ((e.clientY - rect.top) / rect.height) * height;
+    setCursorPos({ x: svgX, y: svgY });
+
+    if (isDraggingRef.current) {
+      const deltaX = e.clientX - dragStartXRef.current;
+      const candleScreenPx = rect.width / visibleCount;
+      if (candleScreenPx > 0) {
+        // Dragging right reveals past bars (positive delta -> higher pan offset)
+        // Dragging left advances toward live edge (negative delta -> lower pan offset)
+        const barsShift = Math.round(deltaX / candleScreenPx);
+        const newPan = Math.max(0, Math.min(maxPan, dragStartPanRef.current + barsShift));
+        setPanOffsetBars(newPan);
+      }
+    } else {
+      // Find hovered candle point based on horizontal crosshair coordinate
+      if (svgX >= paddingLeft && svgX <= width - paddingRight && points.length > 0) {
+        const ratio = (svgX - paddingLeft) / chartW;
+        const index = Math.round(ratio * (points.length - 1));
+        const clampedIndex = Math.max(0, Math.min(points.length - 1, index));
+        setHoveredPoint(points[clampedIndex] || null);
+      }
+    }
+  };
+
+  const handleMouseUp = () => {
+    isDraggingRef.current = false;
+    setIsDragging(false);
+  };
+
+  const handleMouseLeave = () => {
+    isDraggingRef.current = false;
+    setIsDragging(false);
+    setCursorPos(null);
+    setHoveredPoint(null);
+  };
+
+  // Mouse wheel: Vertical scroll or pinch zooms in/out; Horizontal scroll pans timeline
+  const handleWheel = (e: React.WheelEvent<SVGSVGElement>) => {
+    e.preventDefault();
+    if (e.ctrlKey || Math.abs(e.deltaY) >= Math.abs(e.deltaX)) {
+      if (e.deltaY < 0) {
+        setZoomLevel((z) => Math.min(3.0, +(z + 0.15).toFixed(2)));
+      } else {
+        setZoomLevel((z) => Math.max(0.5, +(z - 0.15).toFixed(2)));
+      }
+    } else {
+      const deltaBars = e.deltaX > 0 ? -1 : 1;
+      setPanOffsetBars((p) => Math.max(0, Math.min(maxPan, p + deltaBars)));
+    }
+  };
+
+  // Touch handlers for mobile devices: 1 touch = pan drag, 2 touches = pinch zoom
+  const handleTouchStart = (e: React.TouchEvent<SVGSVGElement>) => {
+    if (e.touches.length === 1) {
+      isDraggingRef.current = true;
+      setIsDragging(true);
+      touchStartRef.current = {
+        x: e.touches[0].clientX,
+        y: e.touches[0].clientY,
+        pan: panOffsetBars,
+      };
+    } else if (e.touches.length === 2) {
+      const dist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      touchStartRef.current = {
+        x: (e.touches[0].clientX + e.touches[1].clientX) / 2,
+        y: (e.touches[0].clientY + e.touches[1].clientY) / 2,
+        dist,
+        pan: panOffsetBars,
+      };
+    }
+  };
+
+  const handleTouchMove = (e: React.TouchEvent<SVGSVGElement>) => {
+    const rect = e.currentTarget.getBoundingClientRect();
+    if (e.touches.length === 1 && isDraggingRef.current) {
+      const deltaX = e.touches[0].clientX - touchStartRef.current.x;
+      const candleScreenPx = rect.width / visibleCount;
+      if (candleScreenPx > 0) {
+        const barsShift = Math.round(deltaX / candleScreenPx);
+        const newPan = Math.max(0, Math.min(maxPan, touchStartRef.current.pan + barsShift));
+        setPanOffsetBars(newPan);
+      }
+    } else if (e.touches.length === 2 && touchStartRef.current.dist) {
+      const newDist = Math.hypot(
+        e.touches[0].clientX - e.touches[1].clientX,
+        e.touches[0].clientY - e.touches[1].clientY
+      );
+      const ratio = newDist / touchStartRef.current.dist;
+      if (ratio > 1.05) {
+        setZoomLevel((z) => Math.min(3.0, +(z + 0.08).toFixed(2)));
+        touchStartRef.current.dist = newDist;
+      } else if (ratio < 0.95) {
+        setZoomLevel((z) => Math.max(0.5, +(z - 0.08).toFixed(2)));
+        touchStartRef.current.dist = newDist;
+      }
+    }
+  };
+
+  const handleTouchEnd = () => {
+    isDraggingRef.current = false;
+    setIsDragging(false);
+  };
 
   return (
     <div
@@ -501,26 +711,61 @@ export const ChartInspector: React.FC<ChartInspectorProps> = ({
               </button>
             </div>
 
-            {/* Zoom controls */}
+            {/* Pan controls (Horizontal History Navigation) */}
+            <div className="flex items-center bg-slate-900 rounded-lg border border-slate-800 p-0.5" title="Pan timeline across history">
+              <button
+                type="button"
+                onClick={() => setPanOffsetBars((p) => Math.min(maxPan, p + 5))}
+                disabled={effectivePan >= maxPan}
+                className="p-1 px-1.5 text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-25 disabled:cursor-not-allowed rounded transition-colors"
+                title="Pan back in time (Left / ArrowLeft)"
+              >
+                <ChevronLeft className="w-3.5 h-3.5" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setPanOffsetBars((p) => Math.max(0, p - 5))}
+                disabled={effectivePan <= 0}
+                className="p-1 px-1.5 text-slate-400 hover:text-white hover:bg-slate-800 disabled:opacity-25 disabled:cursor-not-allowed rounded transition-colors"
+                title="Pan forward toward live (Right / ArrowRight)"
+              >
+                <ChevronRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+
+            {/* Zoom controls with percentage indicator */}
             <div className="flex items-center bg-slate-900 rounded-lg border border-slate-800 p-0.5">
               <button
-                onClick={() => setZoomLevel((z) => Math.max(0.6, z - 0.2))}
+                type="button"
+                onClick={() => setZoomLevel((z) => Math.max(0.5, +(z - 0.2).toFixed(2)))}
                 className="p-1 px-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors"
-                title="Zoom out"
+                title="Zoom out (see more bars / wider horizon)"
               >
                 <ZoomOut className="w-3 h-3" />
               </button>
+              <span
+                className="text-[10px] font-mono font-bold text-cyan-400 px-1 select-none tabular-nums"
+                title="Current Zoom Level"
+              >
+                {Math.round(zoomLevel * 100)}%
+              </span>
               <button
-                onClick={() => setZoomLevel((z) => Math.min(2.5, z + 0.2))}
+                type="button"
+                onClick={() => setZoomLevel((z) => Math.min(3.0, +(z + 0.2).toFixed(2)))}
                 className="p-1 px-1.5 text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors"
-                title="Zoom in"
+                title="Zoom in (see fewer bars / high detail)"
               >
                 <ZoomIn className="w-3 h-3" />
               </button>
               <button
-                onClick={() => setZoomLevel(1)}
-                className="p-1 px-1.5 text-[10px] text-slate-400 hover:text-white hover:bg-slate-800 rounded transition-colors"
-                title="Reset zoom"
+                type="button"
+                onClick={handleResetZoomPan}
+                className={`p-1 px-1.5 text-[10px] rounded transition-colors ${
+                  zoomLevel !== 1 || effectivePan !== 0
+                    ? 'text-cyan-400 hover:text-cyan-300 hover:bg-cyan-950/60 font-bold'
+                    : 'text-slate-500 hover:text-slate-300 hover:bg-slate-800'
+                }`}
+                title="Reset zoom & pan to live edge (100% / Home / 0)"
               >
                 <RotateCcw className="w-3 h-3" />
               </button>
@@ -543,22 +788,48 @@ export const ChartInspector: React.FC<ChartInspectorProps> = ({
         </div>
       </div>
 
-      {/* Main SVG Canvas Container */}
+      {/* Main SVG Canvas Container with Pan, Zoom & Gestures */}
       <div className="relative flex-1 w-full h-full overflow-hidden bg-[#070b0e] flex items-center justify-center">
+        {/* Subtle Canvas Interaction Overlay Hint */}
+        <div className="absolute top-2 left-3 z-10 pointer-events-none flex items-center gap-2 text-[10px] font-mono text-slate-500 select-none">
+          <span className="flex items-center gap-1 bg-slate-900/80 border border-slate-800/80 px-1.5 py-0.5 rounded backdrop-blur-sm">
+            <Move className="w-2.5 h-2.5 text-cyan-400" />
+            <span>Drag / Arrows to Pan</span>
+          </span>
+          <span className="hidden sm:inline bg-slate-900/80 border border-slate-800/80 px-1.5 py-0.5 rounded backdrop-blur-sm">
+            Scroll to Zoom ({Math.round(zoomLevel * 100)}%)
+          </span>
+        </div>
+
+        {/* Floating Return to Live Edge button when user has panned into historical data */}
+        {effectivePan > 0 && (
+          <button
+            type="button"
+            onClick={handleResetZoomPan}
+            className="absolute bottom-5 right-28 z-20 flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-900/95 border border-emerald-500/80 text-emerald-300 font-mono text-[11px] font-bold shadow-2xl hover:bg-emerald-950/90 transition-all cursor-pointer backdrop-blur-md group animate-in fade-in"
+            title="Snap back to latest live price bar (Home / 0)"
+          >
+            <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
+            <span>Live ({effectivePan} bars back)</span>
+            <ChevronRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
+          </button>
+        )}
+
         <svg
+          ref={svgRef}
           viewBox={`0 0 ${width} ${height}`}
           preserveAspectRatio="none"
-          className="w-full h-full select-none"
-          onMouseMove={(e) => {
-            const rect = e.currentTarget.getBoundingClientRect();
-            const svgX = ((e.clientX - rect.left) / rect.width) * width;
-            const svgY = ((e.clientY - rect.top) / rect.height) * height;
-            setCursorPos({ x: svgX, y: svgY });
-          }}
-          onMouseLeave={() => {
-            setCursorPos(null);
-            setHoveredPoint(null);
-          }}
+          className={`w-full h-full select-none ${
+            isDragging ? 'cursor-grabbing' : 'cursor-crosshair'
+          }`}
+          onMouseDown={handleMouseDown}
+          onMouseMove={handleMouseMove}
+          onMouseUp={handleMouseUp}
+          onMouseLeave={handleMouseLeave}
+          onWheel={handleWheel}
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
         >
           {/* Subtle Grid Lines (Horizontal) */}
           {[0, 0.2, 0.4, 0.6, 0.8, 1].map((pct, idx) => {
@@ -1104,6 +1375,15 @@ export const ChartInspector: React.FC<ChartInspectorProps> = ({
           <span className="text-cyan-400 font-bold bg-cyan-950/60 px-1.5 py-0.5 rounded border border-cyan-800/40 shrink-0">
             {selectedTimeframe}
           </span>
+          {effectivePan > 0 && (
+            <span
+              onClick={handleResetZoomPan}
+              className="text-amber-400 font-bold bg-amber-950/70 px-1.5 py-0.5 rounded border border-amber-700/60 shrink-0 cursor-pointer hover:bg-amber-900/60 transition-colors"
+              title="Viewing past candles. Click to jump to live."
+            >
+              Past View (-{effectivePan} bars) ⚡
+            </span>
+          )}
           <span className="shrink-0">O: ₹{(hoveredPoint?.open || points[points.length - 1]?.open || 0).toFixed(2)}</span>
           <span className="text-emerald-400 shrink-0">H: ₹{(hoveredPoint?.high || points[points.length - 1]?.high || 0).toFixed(2)}</span>
           <span className="text-rose-400 shrink-0">L: ₹{(hoveredPoint?.low || points[points.length - 1]?.low || 0).toFixed(2)}</span>
